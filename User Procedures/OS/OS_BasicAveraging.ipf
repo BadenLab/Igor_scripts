@@ -1,5 +1,4 @@
-#pragma rtGlob#als=3		// Use modern global access method and strict wave access.
-#include "OS_AveragingSuite"
+#pragma rtGlobals=3		// Use modern global access method and strict wave access.
 
 function OS_BasicAveraging()
 
@@ -183,8 +182,7 @@ if (AverageStack_make==1)
 	endfor
 	OutputStack[][][]/=nLoops
 	duplicate /o OutputStack $output_name3 // within Igor it keeps the non flipped 32 bit one
-	//Imagesave /s/f/t="tiff" OutputStack as "AverageStack"
-	OS_AveragingSuite_Chopup()
+	Imagesave /s/f/t="tiff" OutputStack as "AverageStack"
 endif
 
 // export handling

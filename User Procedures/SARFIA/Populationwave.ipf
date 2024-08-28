@@ -1,4 +1,5 @@
-#pragma rtGlobals=3		// Use modern global access method.
+#pragma TextEncoding = "Windows-1252"
+#pragma rtGlobals=1		// Use modern global access method.
 #pragma IgorVersion = 6.1	//Runs only with version 6.1(B05) or later
 
 //update 17/03/10: changed PopStats so that it safely ignores NaNs and infs
@@ -8,6 +9,7 @@
 //populationwave combines many 1D waves to one 2d wave
 //x of 1D becomes x of 2D
 //use transpose XY to transpose
+
 
 function PopulationWave(basename, outputname, number, [offset])
 string basename, outputname
@@ -229,15 +231,15 @@ Function PopStats(PopWave)
 	MatrixOP /o/free NaNWave=Equal(tw2a,val)					//binary matrix of NaN locations
 	MatrixOP /o/free PW2=ReplaceNaNs(popWave,0)				//PopWave with NaN replaced with 0
 	MatrixOP /o/free counterWave=sumRows(-NaNWave+1)		//counts total samples per point (excluding NaN)
-	variable p
+	
 	//sum values
-	for(ii=0;ii<numTraces;ii+=1)
-		
-		if(numtype(PW2[p][ii]))		//skip if inf
-			continue		
-		else
+	For(ii=0;ii<numTraces;ii+=1)
+	
+		//if(numtype(PW2[p][ii]))		//skip if inf
+			//continue		
+		//else
 			W_PopAvg+=PW2[p][ii]
-		endif
+		//endif
 	
 	EndFor
 	
@@ -247,13 +249,13 @@ Function PopStats(PopWave)
 	//calculate distances
 	For(ii=0;ii<numTraces;ii+=1)
 	
-		if(numtype(PW2[p][ii]))		//skip if inf
-			continue
-		else
+		//if(numtype(PW2[p][ii]))		//skip if inf
+			//continue
+		//else
 			MultiThread SDCalc=(PopWave[p][ii]-W_PopAvg[p]) ^2
 			MatrixOP/o/free ToAdd=ReplaceNaNs(SDCalc,0)
 			MultiThread w_PopSD+=ToAdd
-		endif
+		//endif
 		
 	EndFor
 	
@@ -302,19 +304,28 @@ End
 
 ////////////////////////////////////////////////////////////////////
 
-Function AverageWavesFromWindow()
-
+Function AverageWavesFromWindow(name)
+	string name
+	
 	PopWaveFromWindow()
 	Wave WinPop
 	
 	PopStats(WinPop)
 	Wave W_PopAvg, W_PopSD
 	
+	string newnameavg, newnamesem
+	
 	AppendtoGraph w_PopAvg
 	ModifyGraph lsize(W_PopAvg)=2,rgb(W_PopAvg)=(0,0,0)
+	newnameavg = name+"_Avg"
+	newnamesem = name+"_SEM"
+	Rename W_PopAvg, $newnameavg
+	Rename W_PopSEM, $newnamesem
 	
-	Display W_PopAvg
-	ErrorBars W_PopAvg Y,wave=(W_PopSD,W_PopSD)
+	Display $newnameavg
+	ErrorBars $newnameavg Y,wave=($newnamesem,$newnamesem)
+	//newname = name+"_SEM"
+	//Rename W_PopSEM, $newname
 
 
 End

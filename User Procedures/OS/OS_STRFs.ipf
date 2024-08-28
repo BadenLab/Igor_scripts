@@ -12,7 +12,7 @@
 ///   - TracesX_znorm: (per ROI, z-normalised traces, by frames)	///
 ///	- TracetimesX: for each frame (per ROI, 2 ms precision)		///
 ///   - Triggertimes: Timestamps of Triggers (2 ms precision)		///
-///   - Triggervalue: Level of each Trigger  event					///
+///   - Triggervalue: Level of each Trigger  event							///
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 function OS_STRFs()
@@ -58,8 +58,6 @@ variable Noise_PxSize = OS_Parameters[%Noise_PxSize_degree]
 variable Compression = OS_Parameters[%Noise_Compression]
 variable Event_SD = OS_Parameters[%Noise_EventSD]
 variable FilterLength = OS_Parameters[%Noise_FilterLength_s]
-
-variable preSDProjectSmooth = 2
 
 
 // data handling
@@ -127,8 +125,6 @@ make /o/n=(1) W_Statslinearcorrelationtest
 variable firsttrigger_f = triggertimes[0] / (LineDuration*nY)
 variable lasttrigger_f = triggertimes[nTriggers-1] / (LineDuration*nY)
 
-make /o/n=(nROIs) STRF_OnOrOff = NaN
-
 for (rr=0;rr<nRois;rr+=1) // goes through all ROIs
 	printf "#"
 	variable current_lineOffset = InputTraceTimes[0][rr] 
@@ -145,7 +141,14 @@ for (rr=0;rr<nRois;rr+=1) // goes through all ROIs
 		endif
 	endfor
 	CurrentFilter/=nEvents[rr]
-
+	// calculating SD projections
+	for (xx=0;xx<nX_Noise;xx+=1)
+		for (yy=0;yy<nY_Noise;yy+=1)
+			make /o/n=(FilterLength_Real) CurrentTrace = CurrentFilter[xx][yy][p]
+			wavestats/Q CurrentTrace 
+			Filter_SDs[xx][yy][rr]=V_SDev
+		endfor
+	endfor
 	// SVD business
 	for (yy=0;yy<nY_Noise;yy+=1) // reshape 2 space D into 1
 		ST_Kernels[yy*nX_Noise,(yy+1)*nX_Noise-1][][rr]=CurrentFilter[p-yy*nX_Noise][yy][q]
@@ -168,33 +171,14 @@ for (rr=0;rr<nRois;rr+=1) // goes through all ROIs
 		SVDKernels_Time[][rr]*=-1
 		SVDKernels_Space[][][rr]*=-1		
 	endif
-	
-	// get Polarity
-	make /o/n=(FilterLength_Real) tempwave = SVDKernels_Time[p][rr]
-	WaveStats/Q tempwave
-	if (V_MaxLoc>V_MinLoc)
-		STRF_OnOrOff[rr] = 1 // On
-	else
-		STRF_OnOrOff[rr] = -1 // Off
-	endif
+
+
 	// calculating SD projections
-		// smooth
-	duplicate /o CurrentFilter CurrentFilter_Smth
-	if (preSDProjectSmooth>0)
-		Smooth /Dim=0 preSDProjectSmooth, CurrentFilter_Smth
-		Smooth /Dim=1 preSDProjectSmooth, CurrentFilter_Smth
-	endif
-		// z-normalise based on 1st frame
-	make /o/n=(nX_Noise,nY_Noise) tempwave = CurrentFilter_Smth[p][q][0]
-	ImageStats/Q tempwave
-	CurrentFilter_Smth[][][]-=V_Avg
-	CurrentFilter_Smth[][][]/=V_SDev
-	
 	for (xx=0;xx<nX_Noise;xx+=1)
 		for (yy=0;yy<nY_Noise;yy+=1)
-			make /o/n=(FilterLength_Real) CurrentTrace = CurrentFilter_Smth[xx][yy][p]
+			make /o/n=(FilterLength_Real) CurrentTrace = CurrentFilter[xx][yy][p]
 			wavestats/Q CurrentTrace 
-			Filter_SDs[xx][yy][rr]=V_SDev * STRF_OnOrOff[rr]
+			Filter_SDs[xx][yy][rr]=V_SDev
 		endfor
 	endfor
 	
@@ -212,24 +196,6 @@ setscale/p x,-nX_Noise/2*Noise_PxSize,Noise_PxSize,"deg." Filter_SDs,SVDKernels_
 setscale/p y,-nY_Noise/2*Noise_PxSize,Noise_PxSize,"deg." Filter_SDs,SVDKernels_Space // scales y dimension in µm	
 setscale x,-(3*(FilterLength_Real*Compression)/4)*2,((FilterLength_Real*Compression)/4)*2,"ms"  SVDKernels_Time
 
-// Make SD projection Montage for Display
-variable nROIsMax_Display_per_row = 5
-variable nRows = Ceil(nROIs/nROIsMax_Display_per_row)
-variable nColumns = nROIsMax_Display_per_row
-if (nRows==1)
-	nColumns = nROIs
-endif
-make /o/n=(nColumns*nX_Noise,nRows*nY_Noise) STRF_SD_Montage = NaN
-variable currentXCoordinate = 0
-variable currentYCoordinate = 0
-for (rr=0;rr<nRois;rr+=1) // goes through all ROIs
-	STRF_SD_Montage[currentXCoordinate*nX_Noise,(currentXCoordinate+1)*nX_Noise-1][currentYCoordinate*nY_Noise,(currentYCoordinate+1)*nY_Noise-1]=Filter_SDs[p-currentXCoordinate*nX_Noise][q-currentYCoordinate*nY_Noise][rr]
-	currentXCoordinate+=1
-	if (currentXCoordinate>nColumns-1)
-		currentXCoordinate=0
-		currentYCoordinate+=1
-	endif
-endfor
 
 print " done."	
 // export handling
@@ -241,7 +207,6 @@ duplicate /o SVDKernels_Space $output_name_SVD_Space
 // display
 
 if (Display_Stuff==1)
-	// SVD contours and time kernels
 	display /k=1 
 	make /o/n=(1) M_Colors
 	Colortab2Wave Rainbow256
@@ -278,17 +243,10 @@ if (Display_Stuff==1)
 	ModifyGraph width=600,height={Aspect,0.35}
 	DoUpdate
 	ModifyGraph width=0,height=0
-	
-	// display the SD montage
-	display /k=1
-	Appendimage STRF_SD_Montage
-	ModifyGraph fSize=8,noLabel=2,axThick=0
-	
 endif	
 
 // cleanup
 killwaves NoiseStimulus_Lineprecision, CurrentFilter, CurrentTrace, CurrentTrace_DIF, nEvents, Filter_SDs, InputStack,InputTraces,InputTraceTimes,M_Colors
 killwaves M_VT, M_U, CurrentMatrix, SVDKernels_Space1D, W_W,CurrentSVDTimeKernel,CurrentSDTimeKernel,W_Statslinearcorrelationtest,SVDKernels_Time,SVDKernels_Space,currentSVD
-killwaves CurrentFilter_Smth, tempwave
 
 end

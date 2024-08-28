@@ -23,9 +23,10 @@
 function OS_Bars()
 
 variable Script_version = 2 // 1 is "original for bars", 2 is "Chiara's version"
-variable VectorSum_Threshold =0.3
+variable VectorSum_Threshold =0.9
 variable RadialHist_Range = 0.2
 variable nAngleBins = 16
+variable QC_thresh = 0.4
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 variable Response_start_F= 25 
@@ -34,17 +35,17 @@ variable X_squish = 100
 variable y_squish = 10
 make /o/n=8 Conditions = {0,4,1,5,2,6,3,7}
 if (Script_version==1)
-	Response_start_F= 25 // positions for readout in the actual response trace, in frames
+	Response_start_F= 15 // positions for readout in the actual response trace, in frames
 	Response_End_F =55
 	X_squish = 100 // for trace visualisation
 	y_squish = 10
 	make /o/n=8 Conditions = {0,4,1,5,2,6,3,7} // Starting "Down", going  anticlockwise
 elseif (Script_version==2) // Chiara's Version
-	Response_start_F= 9//25 // positions for readout in the actual response trace, in frames
-	Response_End_F =16//55
-	X_squish = 40// 100 // for trace visualisation
-	y_squish = 0.5//10
-	make /o/n=8 Conditions = {2,6,3,7,4,0,5,1} //{0,4,1,5,2,6,3,7} // Starting "Down", going  anticlockwise
+	Response_start_F= 17//25 // positions for readout in the actual response trace, in frames
+	Response_End_F =31//55
+	X_squish = 50// 100 // for trace visualisation
+	y_squish = 2
+	make /o/n=8 Conditions = {2,6,3,7,4,0,5,1} //{0,4,1,5,2,6,3,7} 
 endif
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,6 +74,13 @@ if (waveexists($"Triggertimes")==0)
 	OS_TracesAndTriggers()
 	DoUpdate
 endif
+// 5 //  check if QualityCriterion is there
+if (waveexists($"QualityCriterion")==0)
+	print "Warning: QualityCriterion wave not yet generated - aborting..."
+	abort
+endif
+
+
 
 // compute bar specific things
 
@@ -107,7 +115,8 @@ duplicate /o $traces_name InputTraces
 wave wParamsNum // Reads data-header
 wave CoM
 wave ROIs
-wave Stack_ave
+wave Stack_SD
+wave QualityCriterion
 
 variable nX = DimSize(ROIs,0)
 variable nY = DimSize(ROIs,1)
@@ -154,25 +163,27 @@ make/o/n=(nRois) Bar_VectorSum = nan
 
 
 for (rr=0;rr<nROIs;rr+=1)
-	make/o/n=(nConditions) Maximum_Response = 0
-	make/o/n=(nConditions) Maximum_Response_sorted = 0	
-	for(cc=0;cc<nConditions;cc+=1)
-		make/o/n=(SnippetDuration) CurrentWave = Bar_Averages[p][cc][rr]
-		Maximum_Response[cc]= WaveMax(CurrentWave,Response_start_F,Response_End_F)
-		Maximum_Response_sorted[Conditions[cc]]= WaveMax(CurrentWave,Response_start_F,Response_End_F)
-	endfor
+	if (QualityCriterion[rr]>QC_thresh)
+		make/o/n=(nConditions) Maximum_Response = 0
+		make/o/n=(nConditions) Maximum_Response_sorted = 0	
+		for(cc=0;cc<nConditions;cc+=1)
+			make/o/n=(SnippetDuration) CurrentWave = Bar_Averages[p][cc][rr]
+			Maximum_Response[cc]= WaveMax(CurrentWave,Response_start_F,Response_End_F)
+			Maximum_Response_sorted[Conditions[cc]]= WaveMax(CurrentWave,Response_start_F,Response_End_F)
+		endfor
+	
+		Maximum_Response[]=(Maximum_Response[p]<0)?(0):(Maximum_Response[p]) // eliminate negatives
+		Maximum_Response_sorted[]=(Maximum_Response_sorted[p]<0)?(0):(Maximum_Response_sorted[p])
+		Wavestats/Q Maximum_Response 
+		if (V_Max>0) // if any non-zero ones are left
+		  	Maximum_Response/=V_max
+			Maximum_Response_sorted/=V_Max
+		endif
 
-	Maximum_Response[]=(Maximum_Response[p]<0)?(0):(Maximum_Response[p]) // eliminate negatives
-	Maximum_Response_sorted[]=(Maximum_Response_sorted[p]<0)?(0):(Maximum_Response_sorted[p])
-	Wavestats/Q Maximum_Response 
-	if (V_Max>0) // if any non-zero ones are left
-	  	Maximum_Response/=V_max
-		Maximum_Response_sorted/=V_Max
+		Bar_Responses[][rr] = Maximum_Response[p]
+		Bar_Responses_sorted[0,nConditions-1][rr] = Maximum_Response_sorted[p]
+		Bar_Responses_sorted[nConditions][rr] = Maximum_Response_sorted[0]//extra condition wrap
 	endif
-
-	Bar_Responses[][rr] = Maximum_Response[p]
-	Bar_Responses_sorted[0,nConditions-1][rr] = Maximum_Response_sorted[p]
-	Bar_Responses_sorted[nConditions][rr] = Maximum_Response_sorted[0]//extra condition wrap
 endfor
 
 setscale x,0,360,"deg." Bar_Responses_sorted
@@ -310,7 +321,7 @@ endif
 
 // Additional display stuff quickly hacked in
 display /k=1
-Appendimage Stack_ave
+Appendimage Stack_SD
 Appendimage ROIs
 duplicate /o MeanVectors MeanVectors_inflated
 MeanVectors_inflated*=100
@@ -337,7 +348,7 @@ for (rr=0;rr<nROIs;rr+=1)
 	ModifyGraph rgb($tracename) = (M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2])
 endfor
 ModifyGraph lsize=1.5
-ModifyGraph height={Aspect,1}
+//ModifyGraph height={Aspect,1}
 
 // histogram of angles
 •Make/N=(nAngleBins+1)/O Bar_AnglesPis_Hist;DelayUpdate

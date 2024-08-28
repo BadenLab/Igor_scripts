@@ -35,7 +35,7 @@ entry_position+=2
 /// DETREND ////////////////////////////////////////////////////////////////////////////////////////////////
 
 SetDimLabel 0,entry_position,Detrend_Skip,OS_Parameters
-OS_Parameters[%Detrend_Skip] = 0 // 1 skips the detrend
+OS_Parameters[%Detrend_Skip] = 1 // 1 skips the detrend
 entry_position+=1
 
 SetDimLabel 0,entry_position,Detrend_nTimeBin,OS_Parameters
@@ -47,7 +47,7 @@ OS_Parameters[%Detrend_smooth_window] = 1000 // smoothing window in seconds - de
 entry_position+=1
 
 SetDimLabel 0,entry_position,LightArtifact_cut,OS_Parameters
-OS_Parameters[%LightArtifact_cut] = 2 // nPixels cut in X to remove LightArtifact - default 3
+OS_Parameters[%LightArtifact_cut] = 0 // nPixels cut in X to remove LightArtifact - default 3
 entry_position+=1
 
 SetDimLabel 0,entry_position,fullFOVSize,OS_Parameters
@@ -83,7 +83,7 @@ OS_Parameters[%ROIGap_px] = 1 // minimum spacing between ROIs - SD Roi placement
 entry_position+=1
 
 SetDimLabel 0,entry_position,ROI_SD_min,OS_Parameters
-OS_Parameters[%ROI_SD_min] = 10 // SD minimum value for SD auto ROI - default 10
+OS_Parameters[%ROI_SD_min] = 30 // SD minimum value for SD auto ROI - default 10
 entry_position+=1
 
 SetDimLabel 0,entry_position,useMask4Corr,OS_Parameters
@@ -95,11 +95,11 @@ OS_Parameters[%ROI_PxBinning] = 1 // Bin pixels to autoplace ROIs (speedup = 2^B
 entry_position+=1
 
 SetDimLabel 0,entry_position,IncludeDiagonals,OS_Parameters
-OS_Parameters[%IncludeDiagonals] = 1 // Use diagnoal pixels to compute correlation projection? - default 0
+OS_Parameters[%IncludeDiagonals] = 0 // Use diagnoal pixels to compute correlation projection? - default 0
 entry_position+=1
 
 SetDimLabel 0,entry_position,TimeCompress,OS_Parameters
-OS_Parameters[%TimeCompress] = 1 // Time-compress traces by factor X when computing correlation - default 10 (original time)
+OS_Parameters[%TimeCompress] = 10 // Time-compress traces by factor X when computing correlation - default 10 (original time)
 entry_position+=2
 
 /// TRACE AND TRIGGER EXTRACTION  ///////////////////////////////////////////////////////////
@@ -189,7 +189,7 @@ OS_Parameters[%Noise_PxSize_degree] = 3 // pixel size of 3D noise - default 3 de
 entry_position+=1
 
 SetDimLabel 0,entry_position,Noise_interval_sec,OS_Parameters
-OS_Parameters[%Noise_interval_sec] = 0.078 // Refresh rate of the Noise (in seconds)
+OS_Parameters[%Noise_interval_sec] = 0.2 // Refresh rate of the Noise (in seconds)
 entry_position+=1
 
 SetDimLabel 0,entry_position,Noise_FilterLength_s,OS_Parameters

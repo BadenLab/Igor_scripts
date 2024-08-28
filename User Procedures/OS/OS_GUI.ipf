@@ -30,7 +30,7 @@ End
 
 
 function OS_GUI()
-	NewPanel /N=OfficialScripts /k=1 /W=(200,100,450,660)
+	NewPanel /N=OfficialScripts /k=1 /W=(500,100,750,660)
 	ShowTools/A
 	SetDrawLayer UserBack
 
