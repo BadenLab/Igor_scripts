@@ -144,10 +144,32 @@ entry_position+=1
 
 SetDimLabel 0,entry_position,PlotOnlyHeatMap,OS_Parameters
 OS_Parameters[%PlotOnlyHeatMap] = 50 // PlotOnlyHeatMap above this number of ROIs
+entry_position+=2
+
+/// Average STACK  /////////////////////////////////////////////////////////////////////////
+
+SetDimLabel 0,entry_position,AvgStack_make,OS_Parameters
+OS_Parameters[%AvgStack_make] = 0 // yes or no /0/1; 2 = min sub, 3 = avg sub, 4 = median sub
 entry_position+=1
 
-SetDimLabel 0,entry_position,AverageStack_make,OS_Parameters
-OS_Parameters[%AverageStack_make] = 0 // yes or no /0/1 - default 0
+SetDimLabel 0,entry_position,AvgStack_SkipTrig,OS_Parameters
+OS_Parameters[%AvgStack_SkipTrig] = 1 // Every how many triggers should this chop
+entry_position+=1
+
+SetDimLabel 0,entry_position,AvgStack_firstplane,OS_Parameters
+OS_Parameters[%AvgStack_firstplane] = 1 // only if multiplane, which plane is the first in z, default 1
+entry_position+=2
+
+
+
+/// QC Projections  /////////////////////////////////////////////////////////////////////////
+
+SetDimLabel 0,entry_position,QCProjection_make,OS_Parameters
+OS_Parameters[%QCProjection_make] = 1 // Compute QC projection or not - default 1 (yes)
+entry_position+=1
+
+SetDimLabel 0,entry_position,QCProjection_binning,OS_Parameters
+OS_Parameters[%QCProjection_binning] = 1 // Binning parameter for QC projection. Default 1
 entry_position+=2
 
 
