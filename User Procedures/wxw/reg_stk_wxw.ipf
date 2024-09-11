@@ -1,10 +1,14 @@
-#pragma rtGlobals=1		// Use modern global access method.
-#pragma IgorVersion = 6.1
+﻿#pragma TextEncoding = "UTF-8"
+#pragma rtGlobals=3				// Use modern global access method and strict wave access
+#pragma DefaultTab={3,20,4}		// Set default tab width in Igor Pro 9 and later
+
+
 
 //update 16/11/10: added flag /pstk to RegisterStack registration
 
-Function RegisterStack(picwave, [target])
-
+Function Reg_stk_wxw(picwave, [target,ref_st,ref_end])
+	
+	variable ref_st, ref_end
 	wave picwave
 	string target
 	variable dims, type
@@ -25,6 +29,8 @@ Function RegisterStack(picwave, [target])
 	
 	if(paramisdefault(target))
 		target = name+"_reg"
+		ref_st = 60
+		ref_end = 65
 	endif
 	
 	
@@ -44,13 +50,13 @@ Function RegisterStack(picwave, [target])
 	wave M_aveimage
 	wave ave_image_stck = M_aveimage
 	
-	duplicate /o/R=[][][1,50] regcalcwave, ref1		// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
+	duplicate /o/R=[][][ref_st,ref_end] regcalcwave, ref1		// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
 	imagetransform averageimage ref1		// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
 	wave M_aveimage									// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
 	wave ref=M_aveimage					// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
 	redimension/S /N=(-1,-1) ref
 	
-	imageregistration /q /stck /pstk /csnr=0 /refm=0 /tstm=0 testwave=regcalcwave, refwave=ref1
+	imageregistration /q /stck /csnr=1 /refm=2 /tstm=2 /pstk testwave=regcalcwave, refwave=ref1
 	wave m_regout
 	wavestats ref1
 	MatrixOP/o/free w_NaNBusted = ReplaceNaNs(m_regout, V_avg)	//replace NaN's with 0
@@ -61,33 +67,4 @@ Function RegisterStack(picwave, [target])
 	killwaves /z  ref, regcalcwave, M_Regout, M_Regmaskout, M_RegParams, W_RegParams  
 end
 
-
-////////////////////////////////////////////////
-
-Function Reg2(picwave)
-wave picwave
-
-string result = nameofwave(picwave)
-
-RegisterStack(picwave, target=result)
-
-print "Completed registration of <"+result+">"
-
-end
-
-////////////////////////////////////////////////
-
-Function QuickReg()
-
-string topwave
-
-GetWindow kwTopWIn, wavelist
-wave /t w_wavelist
-
-topwave = w_wavelist[0][0]
-
-Reg2($topwave)
-
-killwaves /z w_wavelist
-end
 
