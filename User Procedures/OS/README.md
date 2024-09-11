@@ -1,24 +1,4 @@
-###Preprocessing ScanM imaging data (with IgorPRO)
-
-Import and export hdf5 files from Igor. Import these hdf5 files to Python.
-
-
-####Prerequisites
-
-- the HDF5 Loader is installed (shortcuts to the files starting with ``...\Wavemetrics\...\More Extensions\File Loaders\HDF5`` need to be present in ``...\User\...\WaveMetrics\Igor Pro 6 User Files\Igor Extensions``)
-
-- SARFIA is installed (see http://www.igorexchange.com/project/SARFIA)
-
-- the ScanM file loader is installed (see ``ret_preprocessing/ScM/ScanM_FileIO``)
-
-
-#### Installing OS scripts
-
-1. Copy all "OS" scripts into your User Procedures in My Documents
-
-2. Copy a shortcut for "OS_GUI"` to Igor Procedures
-
-3. Restart Igor for changes to take effect
+### Preprocessing ScanM imaging data (with IgorPRO)
 
 
 #### Using OS scripts (Igor)

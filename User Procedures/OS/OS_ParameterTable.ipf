@@ -83,7 +83,7 @@ OS_Parameters[%ROIGap_px] = 1 // minimum spacing between ROIs - SD Roi placement
 entry_position+=1
 
 SetDimLabel 0,entry_position,ROI_SD_min,OS_Parameters
-OS_Parameters[%ROI_SD_min] = 30 // SD minimum value for SD auto ROI - default 10
+OS_Parameters[%ROI_SD_min] = 150 // SD minimum value for SD auto ROI - default 10
 entry_position+=1
 
 SetDimLabel 0,entry_position,useMask4Corr,OS_Parameters
@@ -95,11 +95,11 @@ OS_Parameters[%ROI_PxBinning] = 1 // Bin pixels to autoplace ROIs (speedup = 2^B
 entry_position+=1
 
 SetDimLabel 0,entry_position,IncludeDiagonals,OS_Parameters
-OS_Parameters[%IncludeDiagonals] = 0 // Use diagnoal pixels to compute correlation projection? - default 0
+OS_Parameters[%IncludeDiagonals] = 1 // Use diagnoal pixels to compute correlation projection? - default 0
 entry_position+=1
 
 SetDimLabel 0,entry_position,TimeCompress,OS_Parameters
-OS_Parameters[%TimeCompress] = 10 // Time-compress traces by factor X when computing correlation - default 10 (original time)
+OS_Parameters[%TimeCompress] = 1 // Time-compress traces by factor X when computing correlation - default 10 (original time)
 entry_position+=2
 
 /// TRACE AND TRIGGER EXTRACTION  ///////////////////////////////////////////////////////////
@@ -113,7 +113,7 @@ OS_Parameters[%Skip_Last_Triggers] = 0  // skips last trigger, e.g. when last lo
 entry_position+=1
 
 SetDimLabel 0,entry_position,Baseline_nSeconds,OS_Parameters
-OS_Parameters[%Baseline_nSeconds] = 5  // takes the 1st n seconds to calculate the baseline noise (for z-normalisation) - default 5
+OS_Parameters[%Baseline_nSeconds] = 4  // takes the 1st n seconds to calculate the baseline noise (for z-normalisation) - default 5
 entry_position+=1
 
 SetDimLabel 0,entry_position,Ignore1stXseconds,OS_Parameters
@@ -144,10 +144,36 @@ entry_position+=1
 
 SetDimLabel 0,entry_position,PlotOnlyHeatMap,OS_Parameters
 OS_Parameters[%PlotOnlyHeatMap] = 50 // PlotOnlyHeatMap above this number of ROIs
+entry_position+=2
+
+/// Average STACK  /////////////////////////////////////////////////////////////////////////
+
+SetDimLabel 0,entry_position,AvgStack_make,OS_Parameters
+OS_Parameters[%AvgStack_make] = 0 // yes or no /0/1; 2 = min sub, 3 = avg sub, 4 = median sub
 entry_position+=1
 
-SetDimLabel 0,entry_position,AverageStack_make,OS_Parameters
-OS_Parameters[%AverageStack_make] = 0 // yes or no /0/1 - default 0
+SetDimLabel 0,entry_position,AvgStack_SkipTrig,OS_Parameters
+OS_Parameters[%AvgStack_SkipTrig] = 1 // Every how many triggers should this chop
+entry_position+=1
+
+SetDimLabel 0,entry_position,AvgStack_firstplane,OS_Parameters
+OS_Parameters[%AvgStack_firstplane] = 1 // only if multiplane, which plane is the first in z, default 1
+entry_position+=2
+
+
+
+/// QC Projections  /////////////////////////////////////////////////////////////////////////
+
+SetDimLabel 0,entry_position,QCProjection_make,OS_Parameters
+OS_Parameters[%QCProjection_make] = 1 // Compute QC projection or not - default 1 (yes)
+entry_position+=1
+
+SetDimLabel 0,entry_position,QCProj_TriggersPerStim,OS_Parameters
+OS_Parameters[%QCProj_TriggersPerStim] = 1 // Get QC proj per n Triggers - default 1
+entry_position+=1
+
+SetDimLabel 0,entry_position,QCProjection_binning,OS_Parameters
+OS_Parameters[%QCProjection_binning] = 1 // Binning parameter for QC projection. Default 1
 entry_position+=2
 
 
@@ -189,7 +215,7 @@ OS_Parameters[%Noise_PxSize_degree] = 3 // pixel size of 3D noise - default 3 de
 entry_position+=1
 
 SetDimLabel 0,entry_position,Noise_interval_sec,OS_Parameters
-OS_Parameters[%Noise_interval_sec] = 0.2 // Refresh rate of the Noise (in seconds)
+OS_Parameters[%Noise_interval_sec] = 0.078 // Refresh rate of the Noise (in seconds)
 entry_position+=1
 
 SetDimLabel 0,entry_position,Noise_FilterLength_s,OS_Parameters

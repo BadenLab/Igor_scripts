@@ -1,4 +1,5 @@
-#pragma rtGlobals=3		// Use modern global access method and strict wave access.
+#pragma rtGlob#als=3		// Use modern global access method and strict wave access.
+#include "OS_AveragingSuite"
 
 function OS_BasicAveraging()
 
@@ -35,14 +36,19 @@ variable LineDuration = OS_Parameters[%LineDuration]
 variable Triggermode = OS_Parameters[%Trigger_Mode]
 variable Ignore1stXseconds = OS_Parameters[%Ignore1stXseconds]
 variable IgnoreLastXseconds = OS_Parameters[%IgnoreLastXseconds]
-variable AverageStack_make = OS_Parameters[%AverageStack_make]
+variable AverageStack_make = OS_Parameters[%AvgStack_make]
 variable X_cut = OS_Parameters[%LightArtifact_cut]
 variable nStimSegments =  OS_Parameters[%Stim_Marker]
 variable nTrace_Max_full =  OS_Parameters[%PlotOnlyMeans]
 variable nTrace_Max_trace =  OS_Parameters[%PlotOnlyHeatMap]
 variable nLines_Lumped = OS_Parameters[%nLines_lumped]
+variable Make_QCprojection = OS_Parameters[%QCProjection_make]
+variable TriggersPerStim = OS_Parameters[%QCProj_TriggersPerStim]
+variable QCProjection_binning = OS_Parameters[%QCProjection_binning]
+variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullFOVSize]/0.5)
 
 // data handling
+wave wParamsNum // Reads data-header
 string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 string traces_name = "Traces"+Num2Str(Channel)+"_raw"
 if (use_znorm==1)
@@ -69,6 +75,10 @@ string output_name4 = "SnippetsTimes"+Num2Str(Channel) // andre addition 2016 04
 
 
 variable tt,rr,ll,pp,xx,yy,ff
+variable bbx, bby // needed for QC projection binning
+
+variable zoom = wParamsNum(30) // extract zoom
+variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
 
 // Get Snippet Duration, nLoops etc..
 variable nTriggers
@@ -149,7 +159,7 @@ make /o/n=(nRois) MoV = NaN // (1 - variance of mean / mean of variance)
 make /o/n=(nRois) VoM = NaN // (1 - variance of mean / mean of variance)
 
 for (rr=0;rr<nRois;rr+=1)
-	make /o/n=(SnippetDuration * 1/(LineDuration*nLines_Lumped)) currentwave = OutputTraceAverages[p][rr]
+	make /o/n=(SnippetDuration) currentwave = OutputTraceAverages[p][rr]
 	Wavestats/Q currentwave
 	variable variance_of_mean = V_SDev^2
 	VoM[rr]=variance_of_mean
@@ -163,27 +173,138 @@ for (rr=0;rr<nRois;rr+=1)
 	Wavestats/Q currentwave2
 	mean_of_variance=V_Avg
 	MoV[rr]=mean_of_variance
+	
 	QualityCriterion[rr]= variance_of_mean / Mean_of_variance
 endfor
 
+
 // make average stack (optional) - frame precision
 
-if (AverageStack_make==1)
-	print "Generating AverageStack"
+variable CurrentTriggerFrame
+if (AverageStack_make>0)
+	print "Generating AverageStack and QC projection"
 	make /o/n=(nX-X_Cut,nY) OutputStack_avg = 0
 	make /o/n=(nX-X_Cut,nY,SnippetDuration/FrameDuration) OutputStack = 0 // at framerate
-	for (ll=0;ll<nLoops;ll+=1)	// average across loops
-		variable CurrentTriggerFrame = (Triggertimes[ll*TriggerMode+Ignore1stXTriggers])/FrameDuration
-		for (xx=0;xx<nX-X_Cut;xx+=1)
-			for (yy=0;yy<nY;yy+=1)
-				Multithread OutputStack[xx][yy][]+=InputStack[xx+X_Cut][yy][r+CurrentTriggerFrame]
+	for (xx=0;xx<nX-X_Cut;xx+=1)
+		for (yy=0;yy<nY;yy+=1)
+			variable CurrentSubstraction = 0
+			if (AverageStack_make>1) // >1 is extra processing
+				make /o/n=(nF) tempwave = InputStack[xx+X_Cut][yy][p]
+				WaveStats/Q tempwave
+				if (Averagestack_make==2)
+					CurrentSubstraction=V_Min
+				elseif (Averagestack_make==3)
+					CurrentSubstraction=V_Avg
+				elseif (Averagestack_make==4)
+					CurrentSubstraction=StatsMedian(tempwave)
+				endif
+			endif
+			
+			for (ll=0;ll<nLoops;ll+=1)	// average across loops
+				CurrentTriggerFrame = (Triggertimes[ll*TriggerMode+Ignore1stXTriggers])/FrameDuration
+				Multithread OutputStack[xx][yy][]+=InputStack[xx+X_Cut][yy][r+CurrentTriggerFrame] - CurrentSubstraction
 			endfor
 		endfor
 	endfor
 	OutputStack[][][]/=nLoops
+		
 	duplicate /o OutputStack $output_name3 // within Igor it keeps the non flipped 32 bit one
-	Imagesave /s/f/t="tiff" OutputStack as "AverageStack"
+	//Imagesave /s/f/t="tiff" OutputStack as "AverageStack"
+	OS_AveragingSuite_Chopup()
 endif
+
+////////////////////////////////////////////
+// QC projection, including per trigger
+
+variable TriggerDivider = Ceil(Triggermode/TriggersPerStim)
+
+if (Make_QCprojection==1)
+	print "Computing QC projections..."
+
+	make /o/n=(nX-X_Cut,nY) QC_projection = NaN
+	make /o/n=(nX-X_Cut,nY,TriggerDivider) QC_projection_perTrigger = NaN
+	
+	setscale /p x,-nX/2*px_Size,px_Size,"µm" QC_projection, QC_projection_perTrigger
+	setscale /p y,-nY/2*px_Size,px_Size,"µm"  QC_projection, QC_projection_perTrigger
+	
+	for (xx=0;xx<nX-X_Cut;xx+=QCProjection_binning)
+		for (yy=0;yy<nY;yy+=QCProjection_binning)
+			for (tt=0;tt<TriggerDivider;tt+=1)	
+				if (tt==0) // for full QC, rather than per trigger
+					make /o/n=(nLoops) currentwave2_full = NaN //  mean of variance (for QC projection)
+					make /o/n=(SnippetDuration/FrameDuration) currentwave3_full = 0 // for mean
+				endif
+				make /o/n=(nLoops) currentwave2 = NaN //  mean of variance (for QC projection)
+				make /o/n=(ceil((SnippetDuration/FrameDuration)/TriggerDivider)) currentwave3 = 0 // for mean
+				for (ll=0;ll<nLoops;ll+=1)	// average across loops
+					CurrentTriggerFrame = (Triggertimes[ll*TriggerMode+Ignore1stXTriggers+tt*TriggersPerStim])/FrameDuration
+					if (QCProjection_binning==1) // single pixel standard
+						make /o/n=(ceil((SnippetDuration/FrameDuration)/TriggerDivider)) currentwave = InputStack[xx+X_Cut][yy][p+CurrentTriggerFrame]
+						if (tt==0)
+							make /o/n=(SnippetDuration/FrameDuration) currentwave_full = InputStack[xx+X_Cut][yy][p+CurrentTriggerFrame]
+						endif
+					else // add up the corresponding pixels & take mean
+						make /o/n=(ceil((SnippetDuration/FrameDuration)/TriggerDivider)) currentwave = 0
+						if (tt==0)
+							make /o/n=(SnippetDuration/FrameDuration) currentwave_full = 0
+						endif
+						for (bbx=0;bbx<QCProjection_binning;bbx+=1)
+							for (bby=0;bby<QCProjection_binning;bby+=1)
+								currentwave+=InputStack[xx+X_Cut+bbx][yy+bby][p+CurrentTriggerFrame]/(QCProjection_binning^2)
+								if (tt==0)
+									currentwave_full+=InputStack[xx+X_Cut+bbx][yy+bby][p+CurrentTriggerFrame]/(QCProjection_binning^2)
+								endif
+							endfor
+						endfor
+					endif
+					Wavestats/Q currentwave			
+					currentwave2[ll]=V_SDev^2
+					Wavestats/Q currentwave_full			
+					currentwave2_full[ll]=V_SDev^2
+					currentwave3[]+=currentwave[p]/nLoops
+					if (tt==0)
+						currentwave3_full[]+=currentwave_full[p]/nLoops
+					endif
+				endfor
+				Wavestats/Q currentwave3
+				variance_of_mean = V_SDev^2
+				Wavestats/Q currentwave2
+				mean_of_variance=V_Avg
+				if (QCProjection_binning==1)
+					QC_projection_perTrigger[xx][yy][tt]= variance_of_mean / Mean_of_variance
+				else
+					for (bbx=0;bbx<QCProjection_binning;bbx+=1) // paint all corresponding pixels to same QC
+						for (bby=0;bby<QCProjection_binning;bby+=1)
+							QC_projection_perTrigger[xx+bbx][yy+bby][tt]= variance_of_mean / Mean_of_variance
+						endfor
+					endfor	
+				endif
+				
+				if (tt==0)
+					Wavestats/Q currentwave3_full
+					variance_of_mean = V_SDev^2
+					Wavestats/Q currentwave2_full
+					mean_of_variance=V_Avg
+					if (QCProjection_binning==1)
+						QC_projection[xx][yy]= variance_of_mean / Mean_of_variance
+					else
+						for (bbx=0;bbx<QCProjection_binning;bbx+=1) // paint all corresponding pixels to same QC
+							for (bby=0;bby<QCProjection_binning;bby+=1)
+								QC_projection[xx+bbx][yy+bby]= variance_of_mean / Mean_of_variance
+							endfor
+						endfor	
+					endif
+				endif
+				
+			endfor
+		endfor
+	endfor
+	
+
+
+endif
+
+
 
 // export handling
 duplicate /o OutputTraceSnippets $output_name1
@@ -210,7 +331,7 @@ if (Display_averages==1)
 		Appendtograph /l=StimY StimMarker
 		ModifyGraph fSize=8,noLabel(StimY)=2,axThick(StimY)=0,lblPos(StimY)=47;DelayUpdate
 		ModifyGraph axisEnab(StimY)={0.05,1},freePos(StimY)={0,kwFraction}
-		•ModifyGraph mode=5,hbFill=2
+		 ModifyGraph mode=5,hbFill=2
 		ModifyGraph rgb(StimMarker)=(56576,56576,56576)
 		if (nROIs>nTrace_Max_trace)
 			ModifyGraph hbFill=0 // if heatmap, then just plot the skeleton
@@ -268,6 +389,52 @@ if (Display_averages==1)
 	Label bottom "\\Z10Time (\U)"
 endif
 
+if (Make_QCprojection==1)
+	Display /k=1
+	variable WinWidth = 800
+	variable WinHeight = (nY/nX) * WinWidth/3	
+	ModifyGraph width=WinWidth,height=WinHeight
+
+	
+	Appendimage /r=YY /b=QCIndX QC_projection_perTrigger
+
+	// Trigger box	
+	variable/G gCurrentTrigger = 0
+	
+	String iName= WMTopImageGraph()		// find one top image in the top graph window
+	Wave w= $WMGetImageWave(iName)	// get the wave associated with the top image.
+	String/G imageName2=nameOfWave(w)
+	Variable/G gLeftLim=0,gRightLim=TriggerDivider-1,gTrigger=0
+	GetWindow kwTopWin,gsize
+	String cmd
+	SetVariable TriggerVal,pos={V_left+20,V_top+20},size={80,14}
+	SetVariable TriggerVal,limits={0,TriggerDivider-1,1},title="Trig",proc=OS_ExecuteSliderVar_QC
+	sprintf cmd,"SetVariable TriggerVal,value=%s",GetDataFolder(1)+"gCurrentTrigger"
+	Execute cmd
+
+	//
+	setscale /p x,-nX/2*px_Size,px_Size,"µm" stack_SD
+	setscale /p y,-nY/2*px_Size,px_Size,"µm"  stack_SD
+	
+	Appendimage /r=YY /b=AverageX Stack_SD
+	Appendimage /r=YY /b=QCFullX QC_projection
+	
+	ModifyGraph fSize=8,freePos={0,kwFraction}
+	ModifyGraph axisEnab(YY)={0,1},axisEnab(QCIndX)={0.08,0.38},axisEnab(QCFullX)={0.39,0.69},axisEnab(AverageX)={0.7,1}
+
+	Label AverageX "\\Z10SD projection";DelayUpdate
+	Label QCFullX "\\Z10QC projection total";DelayUpdate
+	Label QCIndX "\\Z10QC projection by Stimulus";DelayUpdate
+	ModifyGraph lblPos(AverageX)=47,lblPos(QCFullX)=47,lblPos(QCIndX)=47
+	ModifyGraph lblPos=47
+	ModifyGraph lblPos=47
+	ModifyGraph noLabel=1,axThick=0
+	ModifyGraph noLabel(YY)=2
+	
+	DoUpdate
+	ModifyGraph width=0,height=0
+endif
+
 
 // cleanup
 killwaves InputTraces, InputTraceTimes,CurrentTrace,OutputTracesUpsampled,OutputTraceSnippets,OutputTraceAverages,OutputStack,OutputStack_avg
@@ -277,3 +444,33 @@ killwaves OutputTimeSnippets, OutputTimesUpsampled, CurrentTime
 killwaves inputstack
 
 end
+
+
+//*******************************************************************************************************
+function OS_ExecuteSlider_QC(name, value, event)
+	String name			// name of this slider control
+	Variable value		// value of slider
+	Variable event		// bit field: bit 0: value set; 1: mouse down, //   2: mouse up, 3: mouse moved
+	
+	NVAR gCurrentTrigger
+
+	SVAR imageName2
+	ModifyImage  $imageName2 plane=(gCurrentTrigger)	
+	return 0				// other return values reserved
+end
+//*******************************************************************************************************
+Function OS_ExecuteSliderVar_QC(sva) : SetVariableControl
+	STRUCT WMSetVariableAction &sva
+
+	switch( sva.eventCode )
+		case 1: // mouse up
+		case 2: // Enter key
+		// comment the following line if you want to disable live updates.
+		case 3: // Live update
+			Variable dval = sva.dval
+			OS_ExecuteSlider_QC("",0,0)
+			break
+	endswitch
+
+	return 0
+End
