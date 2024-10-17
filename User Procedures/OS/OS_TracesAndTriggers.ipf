@@ -68,7 +68,9 @@ string output_name5 = "Triggervalues"
 string output_name6 = "Triggertimes_Frame"
 
 duplicate /o $input_name1 InputData
-duplicate /o $input_name2 InputTriggers
+
+
+
 
 // inverting trigger channel
 //InputTriggers*=-1
@@ -77,6 +79,13 @@ duplicate /o $input_name2 InputTriggers
 variable nX = DimSize(InputData,0)
 variable nY = DimSize(InputData,1)
 variable nF = DimSize(InputData,2)
+
+if (waveexists($input_name2)==1)
+	duplicate /o $input_name2 InputTriggers
+else
+	print "no trigger channel found... - making an empty one"
+	make /o/n=(3,nY,nF) InputTriggers = 0
+endif
 
 wave ROIs
 wave Stack_SD
