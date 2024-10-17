@@ -53,6 +53,10 @@ string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 duplicate /o $input_name InputData
 variable nX = DimSize(InputData,0)
 variable nY = DimSize(InputData,1)
+
+variable nX_full = DimSize(InputData,0)
+variable nY_full = DimSize(InputData,1)
+
 variable nF = DimSize(InputData,2)
 variable Framerate = 1/(nY * LineDuration) // Hz 
 variable Total_time = (nF * nX ) * LineDuration
@@ -78,7 +82,10 @@ variable nRois_max = (nX-X_cut/nPxBinning)*nY
 // calculate Pixel / ROI sizes in microns
 variable zoom = wParamsNum(30) // extract zoom
 variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-print "Pixel Size:", round(px_size*100)/100," microns"
+variable px_Size_Full = (0.65/zoom * FOV_at_zoom065)/nX_Full // microns
+
+
+print "Pixel Size:", round(px_Size_Full*100)/100," microns"
 print ROI_minpx, "-", ROI_maxpx, "pixels per ROI"
 variable nPx_neighbours = 1
 
@@ -155,6 +162,13 @@ else
 	
 	ImageStats/Q Stack_Ave
 	Stack_Ave[0,X_cut/nPxBinning][] = V_Avg
+	
+	// expand Corr projection to original size
+	duplicate /o Correlation_projection, correlation_projection_4Compute
+	make /o/n=(nX_full,nY_full) Correlation_projection = 0
+		
+	Correlation_projection[][]=correlation_projection_4Compute[floor(p/nPxBinning)][floor(q/nPxBinning)]
+
 	print "# complete..."
 endif
 
@@ -164,11 +178,12 @@ endif
 
 
 if (correlation_minimum<1 && useMask4Corr == 0) // if this is set to 1, skip this whole thing
-	duplicate /o correlation_projection correlation_projection_sub
+	duplicate /o correlation_projection_4Compute correlation_projection_sub
 	
 	if (GaussSize>0) // Gauss filter smooth the sub image
 		MatrixFilter/N=(GaussSize)/P=1 gauss correlation_projection_sub
 	endif
+	duplicate /o correlation_projection_sub testtest
 	
 	make/o/n=(nRois_max) RoiSizes = nan
 	make /o/n=(nX,nY) ROIs = 1 // 1 means "no roi/ background"
@@ -283,6 +298,7 @@ if (correlation_minimum<1 && useMask4Corr == 0) // if this is set to 1, skip thi
 		duplicate /o ROIs_new ROIs
 		duplicate /o $input_name InputData
 		make /o/n=(nX,nY) Stack_Ave = 0
+
 		for (xx=X_cut;xx<nX;xx+=1)
 			for (yy=0;yy<nY;yy+=1)
 				Multithread currentwave_main[]=InputData[xx][yy][p] // get trace from "reference pixel"
@@ -291,7 +307,7 @@ if (correlation_minimum<1 && useMask4Corr == 0) // if this is set to 1, skip thi
 			endfor
 		endfor
 		Stack_Ave[0,X_cut][] = V_Min		
-	endif
+		endif
 elseif (useMask4Corr == 0) // correlation_minimum is set to 1
 	print "standard ROI placement routine is skipped becasue ROI_corr_min is set to 1"
 	print "generating an empty ROI mask"
@@ -310,8 +326,8 @@ if (useMask4Corr==1)
 		// fix CellLab Scaling
 		wave wROI=root:CellLab2D:Stack_ave:waves:wROI
 		wave wDisplay=root:CellLab2D:Stack_ave:waves:wDisplay
-		setscale /p x,-nX/2*px_Size,px_Size,"µm" wROI, wDisplay
-		setscale /p y,-nY/2*px_Size,px_Size,"µm" wROI, wDisplay
+		setscale /p x,-nX/2*px_Size_Full,px_Size_Full,"µm" wROI, wDisplay
+		setscale /p y,-nY/2*px_Size_Full,px_Size_Full,"µm" wROI, wDisplay
 		//
 		wave ROIs
 		duplicate /o ROIs ROIs_input
@@ -322,7 +338,7 @@ if (useMask4Corr==1)
 		variable nROIs_new = 0
 		for (rr=0;rr<nROIs_input;rr+=1)
 			Multithread CurrentROI[][]=(ROIs_input[p][q]==-rr)?(1):(NaN)
-			CurrentROI[][]*=Correlation_Projection[p][q]
+			CurrentROI[][]*=correlation_projection_4Compute[p][q]
 			ImageStats/Q CurrentROI
 			if (V_Avg>correlation_minimum)
 				nROIs_new+=1
@@ -337,10 +353,9 @@ if (useMask4Corr==1)
 endif
 
 // setscale
-setscale /p x,-nX/2*px_Size,px_Size,"µm" Stack_Ave, ROIs
-setscale /p y,-nY/2*px_Size,px_Size,"µm" Stack_Ave, ROIs
-setscale /p x,-nX/2*px_Size,px_Size*nPxBinning,"µm" Correlation_projection
-setscale /p y,-nY/2*px_Size,px_Size*nPxBinning,"µm" Correlation_projection
+
+setscale /p x,-nX_Full/2*px_Size_Full,px_Size_Full,"µm" Stack_Ave, ROIs, Correlation_projection
+setscale /p y,-nY_Full/2*px_Size_Full,px_Size_Full,"µm" Stack_Ave, ROIs, Correlation_projection
 
 // display
 if (Display_RoiMask==1)

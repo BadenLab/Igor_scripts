@@ -168,6 +168,10 @@ SetDimLabel 0,entry_position,QCProjection_make,OS_Parameters
 OS_Parameters[%QCProjection_make] = 1 // Compute QC projection or not - default 1 (yes)
 entry_position+=1
 
+SetDimLabel 0,entry_position,QCProj_TriggersPerStim,OS_Parameters
+OS_Parameters[%QCProj_TriggersPerStim] = 1 // Get QC proj per n Triggers - default 1
+entry_position+=1
+
 SetDimLabel 0,entry_position,QCProjection_binning,OS_Parameters
 OS_Parameters[%QCProjection_binning] = 1 // Binning parameter for QC projection. Default 1
 entry_position+=2

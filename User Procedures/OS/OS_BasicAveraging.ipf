@@ -43,6 +43,7 @@ variable nTrace_Max_full =  OS_Parameters[%PlotOnlyMeans]
 variable nTrace_Max_trace =  OS_Parameters[%PlotOnlyHeatMap]
 variable nLines_Lumped = OS_Parameters[%nLines_lumped]
 variable Make_QCprojection = OS_Parameters[%QCProjection_make]
+variable TriggersPerStim = OS_Parameters[%QCProj_TriggersPerStim]
 variable QCProjection_binning = OS_Parameters[%QCProjection_binning]
 variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullFOVSize]/0.5)
 
@@ -215,33 +216,35 @@ endif
 ////////////////////////////////////////////
 // QC projection, including per trigger
 
+variable TriggerDivider = Ceil(Triggermode/TriggersPerStim)
+
 if (Make_QCprojection==1)
 	print "Computing QC projections..."
 
-	make /o/n=(nX-X_Cut,nY,Triggermode) QC_projection = NaN
-	make /o/n=(nX-X_Cut,nY,Triggermode) QC_projection_perTrigger = NaN
+	make /o/n=(nX-X_Cut,nY) QC_projection = NaN
+	make /o/n=(nX-X_Cut,nY,TriggerDivider) QC_projection_perTrigger = NaN
 	
 	setscale /p x,-nX/2*px_Size,px_Size,"µm" QC_projection, QC_projection_perTrigger
 	setscale /p y,-nY/2*px_Size,px_Size,"µm"  QC_projection, QC_projection_perTrigger
 	
 	for (xx=0;xx<nX-X_Cut;xx+=QCProjection_binning)
 		for (yy=0;yy<nY;yy+=QCProjection_binning)
-			for (tt=0;tt<Triggermode;tt+=1)	
+			for (tt=0;tt<TriggerDivider;tt+=1)	
 				if (tt==0) // for full QC, rather than per trigger
 					make /o/n=(nLoops) currentwave2_full = NaN //  mean of variance (for QC projection)
 					make /o/n=(SnippetDuration/FrameDuration) currentwave3_full = 0 // for mean
 				endif
 				make /o/n=(nLoops) currentwave2 = NaN //  mean of variance (for QC projection)
-				make /o/n=(ceil((SnippetDuration/FrameDuration)/Triggermode)) currentwave3 = 0 // for mean
+				make /o/n=(ceil((SnippetDuration/FrameDuration)/TriggerDivider)) currentwave3 = 0 // for mean
 				for (ll=0;ll<nLoops;ll+=1)	// average across loops
-					CurrentTriggerFrame = (Triggertimes[ll*TriggerMode+Ignore1stXTriggers+tt])/FrameDuration
+					CurrentTriggerFrame = (Triggertimes[ll*TriggerMode+Ignore1stXTriggers+tt*TriggersPerStim])/FrameDuration
 					if (QCProjection_binning==1) // single pixel standard
-						make /o/n=(ceil((SnippetDuration/FrameDuration)/Triggermode)) currentwave = InputStack[xx+X_Cut][yy][p+CurrentTriggerFrame]
+						make /o/n=(ceil((SnippetDuration/FrameDuration)/TriggerDivider)) currentwave = InputStack[xx+X_Cut][yy][p+CurrentTriggerFrame]
 						if (tt==0)
 							make /o/n=(SnippetDuration/FrameDuration) currentwave_full = InputStack[xx+X_Cut][yy][p+CurrentTriggerFrame]
 						endif
 					else // add up the corresponding pixels & take mean
-						make /o/n=(ceil((SnippetDuration/FrameDuration)/Triggermode)) currentwave = 0
+						make /o/n=(ceil((SnippetDuration/FrameDuration)/TriggerDivider)) currentwave = 0
 						if (tt==0)
 							make /o/n=(SnippetDuration/FrameDuration) currentwave_full = 0
 						endif
@@ -401,7 +404,7 @@ if (Make_QCprojection==1)
 	String iName= WMTopImageGraph()		// find one top image in the top graph window
 	Wave w= $WMGetImageWave(iName)	// get the wave associated with the top image.
 	String/G imageName2=nameOfWave(w)
-	Variable/G gLeftLim=0,gRightLim=Triggermode-1,gTrigger=0
+	Variable/G gLeftLim=0,gRightLim=TriggerDivider-1,gTrigger=0
 	GetWindow kwTopWin,gsize
 	String cmd
 	SetVariable TriggerVal,pos={V_left+20,V_top+20},size={80,14}
