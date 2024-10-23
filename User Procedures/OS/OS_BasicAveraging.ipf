@@ -49,6 +49,7 @@ variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullF
 
 // data handling
 wave wParamsNum // Reads data-header
+wave wParamsNum // Reads data-header
 string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 string traces_name = "Traces"+Num2Str(Channel)+"_raw"
 if (use_znorm==1)
@@ -75,6 +76,10 @@ string output_name4 = "SnippetsTimes"+Num2Str(Channel) // andre addition 2016 04
 
 
 variable tt,rr,ll,pp,xx,yy,ff
+variable bbx, bby // needed for QC projection binning
+
+variable zoom = wParamsNum(30) // extract zoom
+variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
 variable bbx, bby // needed for QC projection binning
 
 variable zoom = wParamsNum(30) // extract zoom
@@ -224,8 +229,8 @@ if (Make_QCprojection==1)
 	make /o/n=(nX-X_Cut,nY) QC_projection = NaN
 	make /o/n=(nX-X_Cut,nY,TriggerDivider) QC_projection_perTrigger = NaN
 	
-	setscale /p x,-nX/2*px_Size,px_Size,"µm" QC_projection, QC_projection_perTrigger
-	setscale /p y,-nY/2*px_Size,px_Size,"µm"  QC_projection, QC_projection_perTrigger
+	setscale /p x,-nX/2*px_Size,px_Size,"ï¿½m" QC_projection, QC_projection_perTrigger
+	setscale /p y,-nY/2*px_Size,px_Size,"ï¿½m"  QC_projection, QC_projection_perTrigger
 	
 	for (xx=0;xx<nX-X_Cut;xx+=QCProjection_binning)
 		for (yy=0;yy<nY;yy+=QCProjection_binning)
@@ -408,11 +413,14 @@ if (Make_QCprojection==1)
 	GetWindow kwTopWin,gsize
 	String cmd
 	SetVariable TriggerVal,pos={V_left+20,V_top+20},size={80,14}
-	SetVariable TriggerVal,limits={0,Triggermode-1,1},title="Trig",proc=OS_ExecuteSliderVar_QC
+	SetVariable TriggerVal,limits={0,TriggerDivider-1,1},title="Trig",proc=OS_ExecuteSliderVar_QC
 	sprintf cmd,"SetVariable TriggerVal,value=%s",GetDataFolder(1)+"gCurrentTrigger"
 	Execute cmd
 
 	//
+	setscale /p x,-nX/2*px_Size,px_Size,"ï¿½m" stack_SD
+	setscale /p y,-nY/2*px_Size,px_Size,"ï¿½m"  stack_SD
+	
 	Appendimage /r=YY /b=AverageX Stack_SD
 	Appendimage /r=YY /b=QCFullX QC_projection
 	
