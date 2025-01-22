@@ -30,14 +30,23 @@ wave OS_Parameters
 wave wDataCh0
 ////
 
+variable nX = DimSize(wDataCh0,0)
+variable nY = DimSize(wDataCh0,1)
+variable nF = DimSize(wDataCh0,2)
+
 // reducing Trigger array to 2 lines to save memory
-Print "Reducing Trigger array to just 2 lines..." 
-variable nX_trig = 2
-wave wDataCh2
-make /o/n=(2,Dimsize(wDataCh2,1),Dimsize(wDataCh2,2)) TriggerChannel_reduced = wDataCh2[p][q][r]
-duplicate /o TriggerChannel_reduced wDataCh2 // overwrites the original wDataCh2
-killwaves TriggerChannel_reduced
-print "...done"
+if (waveexists($"wDataCh2")==1)
+	Print "Reducing Trigger array to just 2 lines..." 
+	variable nX_trig = 2
+	wave wDataCh2
+	make /o/n=(2,Dimsize(wDataCh2,1),Dimsize(wDataCh2,2)) TriggerChannel_reduced = wDataCh2[p][q][r]
+	duplicate /o TriggerChannel_reduced wDataCh2 // overwrites the original wDataCh2
+	killwaves TriggerChannel_reduced
+	print "...done"
+else
+	print "no triggerchannel found, generating an empty one"
+	make /o/n=(3,nY,nF) wDataCh2 = 0
+endif
 
 variable Channel = OS_Parameters[%Data_Channel]
 variable TriggerChannel = OS_Parameters[%Trigger_Channel] 
@@ -53,9 +62,6 @@ string input_name2 = "wDataCh"+Num2Str(TriggerChannel)
 string output_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 string output_name2 = "wDataCh"+Num2Str(TriggerChannel) // this will overwrite wDataCh2 e.g. - but there is the TriggerData_original backup
 
-variable nX = DimSize(wDataCh0,0)
-variable nY = DimSize(wDataCh0,1)
-variable nF = DimSize(wDataCh0,2)
 variable pp
 
 // multiplane deinterleave and light artifact cut // CURRENTLY DOPESNT DO RED CHANNEL IF EVER NEEDED
@@ -91,14 +97,16 @@ else
 	multithread InputData[LightArtifactCut,nX-1][][]=wDataCh0[nX-1-(p-LightArtifactCut)][q][r]
 endif
 
-// make mean image
-make /o/n=(nX,nY) mean_image = 0
+// make mean and SD images
+make /o/n=(nX,nY) Stack_Ave = 0
+make /o/n=(nX,nY) Stack_SD = 0
 variable xx,yy
 for (xx=0; xx<nX; xx+=1)
 	for (yy=0; yy<nY; yy+=1)
 		make/o/n=(nF) CurrentTrace = InputData[xx][yy][p]
 		Wavestats/Q CurrentTrace
-		mean_image[xx][yy]=V_Avg
+		Stack_Ave[xx][yy]=V_Avg
+		Stack_SD[xx][yy]=V_SDev
 	endfor
 endfor	
 
@@ -115,7 +123,7 @@ if (SkipDetrend==0)
 	make /o/n=(nX,nY,ceil(nF/nTimeBin)) SubtractionStack = NaN // this is another temporary DUPLICATE
 	Multithread SubtractionStack[][][]=InputData[p][q][r*nTimeBin]
 	Smooth/DIM=2 Smoothingfactor, SubtractionStack // This is the slow step
-	Multithread InputData[][][]-=SubtractionStack[p][q][r/nTimeBin]-Mean_image[p][q]
+	Multithread InputData[][][]-=SubtractionStack[p][q][r/nTimeBin]-Stack_Ave[p][q]
 	killwaves SubtractionStack
 else
 	print "skipping detrend..."
@@ -123,10 +131,13 @@ endif
 
 // cut things
 InputData[][][0]=InputData[p][q][1] // copy second frame into 1st to kill frame 1 artifact
-make /o/n=(nX-LightArtifactCut,nY) tempimage = Mean_image[p+LightArtifactCut][q]
+make /o/n=(nX-LightArtifactCut,nY) tempimage = Stack_Ave[p+LightArtifactCut][q]
 ImageStats/Q tempimage
 InputData[0,LightArtifactCut][][]=V_Avg // Clip Light Artifact
-Mean_image[0,LightArtifactCut][]=V_Avg
+Stack_Ave[0,LightArtifactCut][]=V_Avg
+make /o/n=(nX-LightArtifactCut,nY) tempimage = Stack_SD[p+LightArtifactCut][q]
+ImageStats/Q tempimage
+Stack_SD[0,LightArtifactCut][]=V_Avg
 killwaves tempimage
 
 // generate output
@@ -134,8 +145,6 @@ if (waveexists($output_name)==1)
 	killwaves $output_name
 endif
 rename InputData $output_name
-duplicate /o mean_image Stack_Ave
-duplicate /o mean_image Stack_SD // hack
 
 if (nPlanes>1)
 	duplicate /o TriggerData $output_name2 // if had to be deinterleaved need to fix trigger data as well
@@ -143,8 +152,7 @@ if (nPlanes>1)
 endif
 
 // cleanup
-killwaves CurrentTrace,mean_image
-//killwaves InputData
+killwaves CurrentTrace
 
 // outgoing dialogue
 print " complete..."
@@ -182,6 +190,7 @@ killwaves TriggerChannel_reduced
 print "...done"
 
 variable nPlanes = OS_Parameters[%nPlanes]
+variable LightArtifactCut = OS_Parameters[%LightArtifact_cut]
 
 // data handling
 variable nX = DimSize(wDataCh0,0)
@@ -235,20 +244,31 @@ endif
 
 wave wDataCh0_detrended
 
-//// make mean image
-print "Computing mean Image"
-make /o/n=(nX,nY) mean_image = 0
+// make mean and SD images
+make /o/n=(nX,nY) Stack_Ave = 0
+make /o/n=(nX,nY) Stack_SD = 0
 variable xx,yy
 for (xx=0; xx<nX; xx+=1)
 	for (yy=0; yy<nY; yy+=1)
 		make/o/n=(nF) CurrentTrace = wDataCh0_detrended[xx][yy][p]
 		Wavestats/Q CurrentTrace
-		mean_image[xx][yy]=V_Avg
+		Stack_Ave[xx][yy]=V_Avg
+		Stack_SD[xx][yy]=V_SDev
 	endfor
 endfor	
-duplicate /o mean_image Stack_Ave
-duplicate /o mean_image Stack_SD // hack
- killwaves mean_image, CurrentTrace
+
+// cut things
+make /o/n=(nX-LightArtifactCut,nY) tempimage = Stack_Ave[p+LightArtifactCut][q]
+ImageStats/Q tempimage
+Stack_Ave[0,LightArtifactCut][]=V_Avg
+make /o/n=(nX-LightArtifactCut,nY) tempimage = Stack_SD[p+LightArtifactCut][q]
+ImageStats/Q tempimage
+Stack_SD[0,LightArtifactCut][]=V_Avg
+killwaves tempimage
+
+///
+
+killwaves CurrentTrace
 print "done that"
 
 // generate output (wDataCh0_detrended is already dealt with above here)
@@ -290,7 +310,7 @@ endif
 
 // data handling
 string output_name = "wDataCh"+Num2Str(Channel)+"_detrended"
-imagesave /s/t="tiff" $output_name
+imagesave /s/f/t="tiff" $output_name
 
 // outgoing dialogue
 print " complete..."

@@ -95,7 +95,6 @@ Condition_offsets[][1]/=y_squish // y axis compressed 10 fold here
 variable Display_averages = OS_Parameters[%Display_Stuff]
 variable use_znorm = OS_Parameters[%Use_Znorm]
 variable LineDuration = OS_Parameters[%LineDuration] // NOT USED YET
-variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullFOVSize]/0.5)
 
 // data handling
 string traces_name = "Traces"+Num2Str(Channel)+"_raw"
@@ -116,10 +115,6 @@ variable nFrames = DimSize(InputTraces,0)
 variable nROIs = DimSize(InputTraces,1)
 variable nTriggers = Dimsize(Triggertimes,0)
 variable nTrials= floor(nTriggers/ nConditions)
-
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -318,23 +313,30 @@ make /o/n=(1) M_Colors
 Colortab2Wave Rainbow256
 
 for (rr=0;rr<nROIs;rr+=1)
-	//colorposition = 255 * (rr+1)/nRois
-	colorposition = 255 * (Bar_AnglesPis[rr])/2
 	
-	if (Bar_VectorSum[rr]>VectorSum_Threshold)
-		ModifyImage ROIs explicit=1,eval={-rr-1,M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2]}
-	else
-		ModifyImage ROIs explicit=1,eval={-rr-1,30000,30000,30000}
+		colorposition = 255 * (Bar_AnglesPis[rr])/2
+		if (colorposition>255)
+			colorposition=255
+		endif
+		if (colorposition<0)
+			colorposition=0
+		endif
+		
+		if (Bar_VectorSum[rr]>VectorSum_Threshold)
+			ModifyImage ROIs explicit=1,eval={-rr-1,M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2]}
+		else
+			ModifyImage ROIs explicit=1,eval={-rr-1,30000,30000,30000}
+		endif
+		
+		
+		Appendtograph MeanVectors_inflated[][1][rr] vs MeanVectors_inflated[][0][rr]	
+		tracename = "MeanVectors_inflated#"+Num2Str(rr)
+		if (rr==0)
+			  tracename = "MeanVectors_inflated"
+		endif
+	if (NumType(Bar_AnglesPis[rr])==0)	
+		ModifyGraph rgb($tracename) = (M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2])
 	endif
-	
-	
-	Appendtograph MeanVectors_inflated[][1][rr] vs MeanVectors_inflated[][0][rr]	
-	tracename = "MeanVectors_inflated#"+Num2Str(rr)
-	if (rr==0)
-		  tracename = "MeanVectors_inflated"
-	endif
-	ModifyGraph offset($tracename)={(CoM[rr][0]-nY/2)*px_size,(CoM[rr][1]-nX/2)*px_size}
-	ModifyGraph rgb($tracename) = (M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2])
 endfor
 ModifyGraph lsize=1.5
 ModifyGraph height={Aspect,1}

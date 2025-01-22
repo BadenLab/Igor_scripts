@@ -14,11 +14,16 @@
 #include "OS_LineScanFormat"
 #include "OS_LED_Noise"
 #include "OS_Clustering"
-#include "OS_KernelfromROI" 
 #include "OS_Bars"
 #include "OS_Register"  // Takeshi's
 #include "OS_AutoROIs_SD" // Takeshi's
-#include "OS_LoadScanImage" // ScanImageLoader - currently not included as button
+#include "OS_LoadTiff" // Tiff Loader - currently not included as button
+
+#include "OS_AveragingSuite" //
+#include "OS_ROI3D"
+#include "OS_ROIPicker"
+
+
 
 //----------------------------------------------------------------------------------------------------------------------
 Menu "ScanM", dynamic
@@ -30,52 +35,93 @@ End
 
 
 function OS_GUI()
-	NewPanel /N=OfficialScripts /k=1 /W=(200,100,450,660)
+	NewPanel /N=ImageProc /k=1 /W=(200,100,450,780)
 	ShowTools/A
 	SetDrawLayer UserBack
 
-	SetDrawEnv fstyle= 1
-	DrawText 24,36,"(Step 0: Optional)"
-	SetDrawEnv fstyle= 1
-	DrawText 24,36+54,"Step 1: Parameter Table"
-	SetDrawEnv fstyle= 1
-	DrawText 24,90+54,"Step 2: Pre-formatting"
-	SetDrawEnv fstyle= 1
-	DrawText 24,149+54,"Step 3: ROI placement"
-	SetDrawEnv fstyle= 1
-	DrawText 24,272+54,"Step 4: Extract Traces and Triggers"
-	SetDrawEnv fstyle= 1
-	DrawText 24,334+54,"Step 5a: Further optional processes"
-	SetDrawEnv fstyle= 1	
-	DrawText 24,454+54,"Step 6: Database Export/Import (hdf5)"
-	Button step0a,pos={60,39},size={60,26},proc=OS_GUI_Buttonpress,title="Linescan"
-	Button step0b,pos={60+70,39},size={60,26},proc=OS_GUI_Buttonpress,title="Register"
-	Button step0c,pos={78+122,39},size={25,26},proc=OS_GUI_Buttonpress,title="Do"	
-	Button step1a,pos={60,39+54},size={107,26},proc=OS_GUI_Buttonpress,title="Make / Show"
-	Button step1b,pos={192,39+54},size={34,26},proc=OS_GUI_Buttonpress,title="Kill"	
-	Button step2a,pos={60,94+54},size={60,26},proc=OS_GUI_Buttonpress,title="Standard"
-	Button step2b,pos={130,94+54},size={53,26},proc=OS_GUI_Buttonpress,title="Minimal"
-	Button step2c,pos={191,94+54},size={33,26},proc=OS_GUI_Buttonpress,title="Save"
-	Button step3a1,pos={60,155+54},size={53,20},proc=OS_GUI_Buttonpress,title="Manual"
-	Button step3a2,pos={130,155+54},size={43,20},proc=OS_GUI_Buttonpress,title="Apply"
-	Button step3a3,pos={181,155+54},size={43,20},proc=OS_GUI_Buttonpress,title="Pixels"
-	Button step3a4,pos={60,179+54},size={165,20},proc=OS_GUI_Buttonpress,title="Use existing SARFIA Mask"	
-	Button step3b,pos={60,203+54},size={71,20},proc=OS_GUI_Buttonpress,title="Auto Corr"
-	Button step3c,pos={154,203+54},size={71,20},proc=OS_GUI_Buttonpress,title="Auto SD"
-	Button step3d,pos={60,228+54},size={165,20},proc=OS_GUI_Buttonpress,title="Autom. CellLab"
-	Button step4,pos={60,278+54},size={165,26},proc=OS_GUI_Buttonpress,title="Traces and Triggers"
-	Button step5a,pos={60,341+54},size={43,26},proc=OS_GUI_Buttonpress,title="Ave"
-	Button step5b,pos={110,341+54},size={53,26},proc=OS_GUI_Buttonpress,title="Events"			
-	Button step5c,pos={170,341+54},size={54,26},proc=OS_GUI_Buttonpress,title="Kernels"	
-	Button step5d,pos={60,371+54},size={53,26},proc=OS_GUI_Buttonpress,title=" Cluster "			
-	Button step5e,pos={120,371+54},size={43,26},proc=OS_GUI_Buttonpress,title=" ROI-K"	
-	Button step5f,pos={170,371+54},size={54,26},proc=OS_GUI_Buttonpress,title=" K-Map "	
-
-	Button step5g,pos={60,401+54},size={71,26},proc=OS_GUI_Buttonpress,title=" Bars "			
-	Button step5h,pos={154,401+54},size={71,26},proc=OS_GUI_Buttonpress,title=" STRFs "
+	variable BHeight = 25
+	variable BWidth1 = 175
+	variable BWidth2 = 85
+	variable BWidth3 = 55
+	variable BWidth4 = 40
+	variable BGapY = 5
+	variable BGapX = 5
 	
-	Button step6a,pos={60,462+54},size={71,26},proc=OS_GUI_Buttonpress,title="Export"
-	Button step6b,pos={154,462+54},size={71,26},proc=OS_GUI_Buttonpress,title="Import"	
+	variable TopOffset = 40
+	variable BlockOffset = 30
+	
+	variable TextX = 20
+	variable BX = 40
+
+	variable Block1Y = TopOffset
+	variable Block2Y = Block1Y+BlockOffset+BHeight*1+BGapY*1
+	variable Block3Y = Block2Y+BlockOffset+BHeight*1+BGapY*1
+	variable Block4Y = Block3Y+BlockOffset+BHeight*1+BGapY*1
+	variable Block5Y = Block4Y+BlockOffset+BHeight*1+BGapY*1
+	variable Block6Y = Block5Y+BlockOffset+BHeight*4+BGapY*5
+	variable Block7Y = Block6Y+BlockOffset+BHeight*1+BGapY*1
+	variable Block8Y = Block7Y+BlockOffset+BHeight*3+BGapY*4
+
+	
+
+	SetDrawEnv fstyle= 1
+	DrawText textX,Block1Y,"Step 1: Load Data"
+	SetDrawEnv fstyle= 1
+	DrawText textX,Block2Y,"(Step 2: Optional)"
+	SetDrawEnv fstyle= 1
+	DrawText textX,Block3Y,"Step 3: Parameter Table"
+	SetDrawEnv fstyle= 1
+	DrawText textX,Block4Y,"Step 4: Pre-formatting"
+	SetDrawEnv fstyle= 1
+	DrawText textX,Block5Y,"Step 5: ROI placement"
+	SetDrawEnv fstyle= 1
+	DrawText textX,Block6Y,"Step 6: Extract Traces and Triggers"
+	SetDrawEnv fstyle= 1
+	DrawText textX,Block7Y,"Step 7: Further optional processes"
+	SetDrawEnv fstyle= 1	
+	DrawText textX,Block8Y,"Step 8: Database Export/Import (hdf5)"
+	
+	Button LoadScanM,pos={BX,Block1Y+BGapY},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="ScanM" 
+	Button LoadTiff,pos={BX+BWidth2+BGapX,Block1Y+BGapY},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Tiff" 
+	
+	Button LineScan,pos={BX,Block2Y+BGapY},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Linescan"
+	Button Register,pos={BX+BWidth2+BGapX,Block2Y+BGapY},size={BWidth4,BHeight},proc=OS_GUI_Buttonpress,title="Reg."
+	Button RegisterDo,pos={BX+BWidth2+BWidth4+BGapX*2,Block2Y+BGapY},size={BWidth4,BHeight},proc=OS_GUI_Buttonpress,title="Do"	
+	
+	Button MakeTable,pos={BX,Block3Y+BGapY},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Make / Show"
+	Button KillTable,pos={BX+BWidth2+BGapX,Block3Y+BGapY},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Kill"	
+	
+	Button DetrendStandard,pos={BX,Block4Y+BGapY},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Standard"
+	Button DetrendMinimal,pos={BX+BWidth2+BGapX,Block4Y+BGapY},size={BWidth4,BHeight},proc=OS_GUI_Buttonpress,title="Skip"
+	Button DetrendSave,pos={BX+BWidth2+BWidth4+BGapX*2,Block4Y+BGapY},size={BWidth4,BHeight},proc=OS_GUI_Buttonpress,title="Save"
+	
+	Button ROIManual,pos={BX,Block5Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Manual"
+	Button ROIManualApply,pos={BX+BWidth3+BGapX,Block5Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Apply"
+	Button ROIPixelate,pos={BX+BWidth3*2+BGapX*2,Block5Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Pixels"
+	
+	Button ROIPicker1,pos={BX,Block5Y+2*BGapY+BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Picker3D" 
+	Button ROIPicker2,pos={BX+BWidth2+BGapX,Block5Y+2*BGapY+BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="SnailROIs" 
+	
+	Button ROICorr,pos={BX,Block5Y+3*BGapY+2*BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Auto Corr"
+	Button ROISD,pos={BX+BWidth2+BGapX,Block5Y+3*BGapY+2*BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Auto SD"
+	
+	Button ROISARFIA,pos={BX,Block5Y+4*BGapY+3*BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="SARFIA"	
+	Button ROICellLab,pos={BX+BWidth2+BGapX,Block5Y+4*BGapY+3*BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Auto CellLab"
+	
+	Button TracesAndTriggers,pos={BX,Block6Y+BGapY},size={BWidth1,BHeight},proc=OS_GUI_Buttonpress,title="Traces and Triggers"
+	
+	Button Average,pos={BX,Block7Y+BGapY},size={BWidth1,BHeight},proc=OS_GUI_Buttonpress,title="Average"
+	
+		
+	Button Events,pos={BX,Block7Y+2*BGapY+BHeight},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Events"			
+	Button Cluster,pos={BX+BWidth3+BGapX,Block7Y+2*BGapY+BHeight},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title=" Cluster "			
+	Button Bars,pos={BX+BWidth3*2+BGapX*2,Block7Y+2*BGapY+BHeight},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title=" Bars "			
+	
+	Button Kernels,pos={BX,Block7Y+3*BGapY+2*BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Kernels"	
+	Button STRFs,pos={BX+BWidth2+BGapX,Block7Y+3*BGapY+2*BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title=" STRFs "
+	
+	Button HDF5Export,pos={BX,Block8Y+BGapY},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Export"
+	Button HDF5Import,pos={BX+BWidth2+BGapX,Block8Y+BGapY},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Import"	
 	
 	HideTools/A
 end
@@ -89,82 +135,106 @@ Function OS_GUI_Buttonpress(ba) : ButtonControl
 		case 2: // mouse up
 			// click code here
 			strswitch (ba.ctrlName)
-				case "step0a":
+			
+				case "LoadScanM":
+					if(exists("LoadSMPFileWithDialog")==6)
+					 	LoadSMPFileWithDialog()
+					 else
+					 	print "ScanM Loader not found"
+					 endif
+					
+					break
+				case "LoadTiff":
+					OS_LoadTiff()
+					break
+			   ////////////////////
+				case "LineScan":
 					OS_LineScanFormat()
 					break
-				case "step0b":
+				case "Register":
 					OS_registration_rigiddrift()
 					break
-				case "step0c":
+				case "RegisterDo":
 					OS_registration_recover()
 					break
-				case "step1a":
+				///////////////////////
+				case "MakeTable":
 					OS_ParameterTable()
 					break
-				case "step1b":
+				case "KillTable":
 					OS_ParameterTable_Kill()
 					break					
-				case "step2a":
+				///////////////////////
+				case "DetrendStandard":
 					OS_DetrendStack()
 					break
-				case "step2b":
+				case "DetrendMinial":
 					OS_PreFormat_minimal()
 					break		
-				case "step2c":
+				case "DetrendSave":
 					OS_SaveRawAsTiff()
 					break									
-				case "step3a1":
+				///////////////////////
+				case "ROIManual":
 					OS_CallManualROI()
 					break
-				case "step3a2":
+				case "ROIManualApply":
 					OS_ApplyManualRoi()
 					break	
-				case "step3a3":
+				case "ROIPixelate":
 					OS_monoPixelApply()
 					break						
-				case "step3a4":
+				
+				
+				case "ROIPicker1":
+					OS_ROI3D()
+					break
+				case "ROIPicker2":
+					OS_ROIPicker()
+					break
+				
+				
+				case "ROISARFIA":
 					OS_CloneSarfiaRoi()
 					break																		
-				case "step3b":
+				case "ROICorr":
 					OS_AutoRoiByCorr()
 					break
-				case "step3c":
+				case "ROISD":
 					OS_autoROIs_SD()
 					break
-				case "step3d":
+				case "ROICellLab":
 					OS_LaunchCellLab()
 					break
-				case "step4":
+				///////////////////////
+				case "TracesAndTriggers":
 					OS_TracesAndTriggers()
 					break					
-				case "step5a":
+				///////////////////////
+				case "Average":
 					OS_BasicAveraging()
 					break
-				case "step5b":
+				case "Events":
 					OS_EventFinder()
 					break					
-				case "step5c":
+				case "Kernels":
 					OS_LED_Noise()
 					break
-				case "step5d":
+				case "Cluster":
 					OS_Clustering()
 					break
-				case "step5e":
-					OS_KernelfromROI()
-					break
-				case "step5f":
-					OS_IPLKernels()
-					break	
-				case "step5g":
+
+				case "Bars":
 					OS_Bars()
 					break		
-				case "step5h":
-					OS_STRFs()
+				case "STRF":
+					OS_STRFs_new()
 					break																					
-				case "step6a":
+				/////////////
+				case "HDF5Export":
 					OS_hdf5Export()
 					break										
-				case "step6b":
+				case "HDF5Import":
 					OS_hdf5Import("")
 					break
 			endswitch

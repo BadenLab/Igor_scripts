@@ -24,14 +24,13 @@ variable Display_RoiMask = OS_Parameters[%Display_Stuff]
 variable SD_minimum = OS_Parameters[%ROI_SD_min]
 variable ROI_minsize  = OS_Parameters[%ROI_minPx] 
 variable ROI_maxsize = OS_Parameters[%ROI_maxPx] 
-variable ROI_minpx = OS_Parameters[%ROI_minpix] 
+variable ROI_minpx = OS_Parameters[%ROI_minPx] 
 variable GaussSize = OS_Parameters[%ROI_GaussSize]
 variable adjacentPix = OS_Parameters[%ROIGap_px] 
 variable X_cut = OS_Parameters[%LightArtifact_cut]
 variable LineDuration = OS_Parameters[%LineDuration]
 variable nLifesLeft = 10
 variable nPxBinning = OS_Parameters[%ROI_PxBinning]
-variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullFOVSize]/0.5)
 
 variable nROIs_max = 1000
 
@@ -44,12 +43,8 @@ variable nY = Dimsize(wDataCh0_detrended,1)
 variable nLayers = Dimsize(wDataCh0_detrended,2)
 variable GaussFilter = 1
 
-wave wParamsNum // Reads data-header
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-variable MaxPixelRoi = ROI_maxsize//floor((pi * (ROI_maxsize^2))/(px_Size^2))
-variable MinPixelRoi = ROI_minsize//floor((pi * (ROI_minsize^2))/(px_Size^2))
-
+variable MaxPixelRoi = ROI_maxsize
+variable MinPixelRoi = ROI_minsize
 
 duplicate /o wDataCh0_detrended wDataCh0_mask
 
@@ -156,7 +151,6 @@ nY = DimSize(wDataCh0_detrended,1)
 if (MinPixelRoi<ROI_minpx) // exception handling - don't allow ROIs smaller than ROI_minpx pixels
 	MinPixelRoi=ROI_minpx
 endif
-print "Pixel Size:", round(px_size*100)/100," microns"
 print MinPixelRoi, "-", MaxPixelRoi, "pixels per ROI"
 string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 duplicate /o $input_name InputData
@@ -422,10 +416,6 @@ endfor
 
 duplicate /o ROIs_order ROIs
 killwaves ROI_id, ROIs_order
-
-// setscale
-setscale /p x,-nX/2*px_Size,px_Size,"µm" Stack_SD, ROIs
-setscale /p y,-nY/2*px_Size,px_Size,"µm" Stack_SD, ROIs
 
 variable rr
 if (Display_RoiMask==1)

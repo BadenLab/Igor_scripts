@@ -48,7 +48,6 @@ variable QCProjection_binning = OS_Parameters[%QCProjection_binning]
 variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullFOVSize]/0.5)
 
 // data handling
-wave wParamsNum // Reads data-header
 string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 string traces_name = "Traces"+Num2Str(Channel)+"_raw"
 if (use_znorm==1)
@@ -76,9 +75,6 @@ string output_name4 = "SnippetsTimes"+Num2Str(Channel) // andre addition 2016 04
 
 variable tt,rr,ll,pp,xx,yy,ff
 variable bbx, bby // needed for QC projection binning
-
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
 
 // Get Snippet Duration, nLoops etc..
 variable nTriggers
@@ -159,8 +155,9 @@ make /o/n=(nRois) MoV = NaN // (1 - variance of mean / mean of variance)
 make /o/n=(nRois) VoM = NaN // (1 - variance of mean / mean of variance)
 
 for (rr=0;rr<nRois;rr+=1)
-	make /o/n=(SnippetDuration) currentwave = OutputTraceAverages[p][rr]
+	make /o/n=(SnippetDuration * 1/(LineDuration*nLines_Lumped)) currentwave = OutputTraceAverages[p][rr]
 	Wavestats/Q currentwave
+	print SnippetDuration, rr, V_SDev
 	variable variance_of_mean = V_SDev^2
 	VoM[rr]=variance_of_mean
 	variable mean_of_variance = 0
@@ -223,9 +220,6 @@ if (Make_QCprojection==1)
 
 	make /o/n=(nX-X_Cut,nY) QC_projection = NaN
 	make /o/n=(nX-X_Cut,nY,TriggerDivider) QC_projection_perTrigger = NaN
-	
-	setscale /p x,-nX/2*px_Size,px_Size,"µm" QC_projection, QC_projection_perTrigger
-	setscale /p y,-nY/2*px_Size,px_Size,"µm"  QC_projection, QC_projection_perTrigger
 	
 	for (xx=0;xx<nX-X_Cut;xx+=QCProjection_binning)
 		for (yy=0;yy<nY;yy+=QCProjection_binning)
@@ -396,7 +390,7 @@ if (Make_QCprojection==1)
 	ModifyGraph width=WinWidth,height=WinHeight
 
 	
-	Appendimage /r=YY /b=QCIndX QC_projection_perTrigger
+	Appendimage /G=1 /r=YY /b=QCIndX QC_projection_perTrigger
 
 	// Trigger box	
 	variable/G gCurrentTrigger = 0

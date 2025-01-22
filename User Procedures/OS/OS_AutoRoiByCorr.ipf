@@ -41,14 +41,11 @@ variable useMask4Corr = OS_Parameters[%useMask4Corr]
 variable X_cut = OS_Parameters[%LightArtifact_cut]
 variable LineDuration = OS_Parameters[%LineDuration]
 variable nPxBinning = OS_Parameters[%ROI_PxBinning]
-variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullFOVSize]/0.5)
-
 
 variable nLifesLeft = 10
 variable nROIs_absolute_Max = 1000 // does not allow going over 1000 here, otherwise start to get memory issues
 
 // data handling
-wave wParamsNum // Reads data-header
 string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 duplicate /o $input_name InputData
 variable nX = DimSize(InputData,0)
@@ -78,14 +75,6 @@ else
 endif
 variable nRois_max = (nX-X_cut/nPxBinning)*nY
 
-
-// calculate Pixel / ROI sizes in microns
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-variable px_Size_Full = (0.65/zoom * FOV_at_zoom065)/nX_Full // microns
-
-
-print "Pixel Size:", round(px_Size_Full*100)/100," microns"
 print ROI_minpx, "-", ROI_maxpx, "pixels per ROI"
 variable nPx_neighbours = 1
 
@@ -326,8 +315,6 @@ if (useMask4Corr==1)
 		// fix CellLab Scaling
 		wave wROI=root:CellLab2D:Stack_ave:waves:wROI
 		wave wDisplay=root:CellLab2D:Stack_ave:waves:wDisplay
-		setscale /p x,-nX/2*px_Size_Full,px_Size_Full,"µm" wROI, wDisplay
-		setscale /p y,-nY/2*px_Size_Full,px_Size_Full,"µm" wROI, wDisplay
 		//
 		wave ROIs
 		duplicate /o ROIs ROIs_input
@@ -352,10 +339,6 @@ if (useMask4Corr==1)
 	endif	
 endif
 
-// setscale
-
-setscale /p x,-nX_Full/2*px_Size_Full,px_Size_Full,"µm" Stack_Ave, ROIs, Correlation_projection
-setscale /p y,-nY_Full/2*px_Size_Full,px_Size_Full,"µm" Stack_Ave, ROIs, Correlation_projection
 
 // display
 if (Display_RoiMask==1)
@@ -382,9 +365,12 @@ if (Display_RoiMask==1)
 	endfor
 endif
 
+// kill infs/NaN
+Correlation_projection[][]=(NumType(Correlation_projection[p][q])==0)?(Correlation_projection[p][q]):(0)
+
 
 // cleanup
 killwaves InputData,W_Statslinearcorrelationtest,currentwave_main,currentwave_comp, correlation_projection_sub, allRois
-killwaves currentRoi,M_colors,InputDataBinDiv,ROIs_new
+killwaves currentRoi,InputDataBinDiv,ROIs_new
 
 end

@@ -19,19 +19,9 @@ wave /T wParamsStr
 variable entry_position = 0
 
 //////////// from the wParamsNum wave // Andre 2016 04 14
-Variable xPixelsInd,yPixelsInd,realPixDurInd,lineDur,sampRate,sampPeriod,zoomIndx, pcName,delay,year,month,day,recday// Andre 2016 04 14 & 04 26
-string recDate
-string setup
+Variable xPixelsInd,yPixelsInd,realPixDurInd,lineDur,sampRate,sampPeriod// Andre 2016 04 14 & 04 26
 
-/// REGISTERING /////////////////////////////////////////////////////////////////////////////////////////////
 
-SetDimLabel 0,entry_position,registration_averageN,OS_Parameters
-OS_Parameters[%Registration_AverageN] = 10 // Downsampling to speed up
-entry_position+=1
-
-SetDimLabel 0,entry_position,Registration_skipN,OS_Parameters
-OS_Parameters[%Registration_SkipN] = 10 // register using every n images
-entry_position+=2
 /// DETREND ////////////////////////////////////////////////////////////////////////////////////////////////
 
 SetDimLabel 0,entry_position,Detrend_Skip,OS_Parameters
@@ -48,10 +38,6 @@ entry_position+=1
 
 SetDimLabel 0,entry_position,LightArtifact_cut,OS_Parameters
 OS_Parameters[%LightArtifact_cut] = 2 // nPixels cut in X to remove LightArtifact - default 3
-entry_position+=1
-
-SetDimLabel 0,entry_position,fullFOVSize,OS_Parameters
-OS_Parameters[%fullFOVSize] = 0.5 // zoom-factor conversion. 0.5 is "standard", 1.2, 1.8 then gets compensated
 entry_position+=1
 
 /// MULTIPLANE ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -136,15 +122,8 @@ entry_position+=1
 
 SetDimLabel 0,entry_position,nLines_lumped,OS_Parameters
 OS_Parameters[%nLines_lumped] = 1 // For Averaging and beyond, how many lines are combined (to speed up)?
-entry_position+=1
-
-SetDimLabel 0,entry_position,PlotOnlyMeans,OS_Parameters
-OS_Parameters[%PlotOnlyMeans] = 20 // plot only the means above this number of ROIs
-entry_position+=1
-
-SetDimLabel 0,entry_position,PlotOnlyHeatMap,OS_Parameters
-OS_Parameters[%PlotOnlyHeatMap] = 50 // PlotOnlyHeatMap above this number of ROIs
 entry_position+=2
+
 
 /// Average STACK  /////////////////////////////////////////////////////////////////////////
 
@@ -158,6 +137,14 @@ entry_position+=1
 
 SetDimLabel 0,entry_position,AvgStack_firstplane,OS_Parameters
 OS_Parameters[%AvgStack_firstplane] = 1 // only if multiplane, which plane is the first in z, default 1
+entry_position+=1
+
+SetDimLabel 0,entry_position,PlotOnlyMeans,OS_Parameters
+OS_Parameters[%PlotOnlyMeans] = 20 // plot only the means above this number of ROIs
+entry_position+=1
+
+SetDimLabel 0,entry_position,PlotOnlyHeatMap,OS_Parameters
+OS_Parameters[%PlotOnlyHeatMap] = 50 // PlotOnlyHeatMap above this number of ROIs
 entry_position+=2
 
 
@@ -226,66 +213,31 @@ SetDimLabel 0,entry_position,Kernel_SDplot,OS_Parameters
 OS_Parameters[%Kernel_SDplot] = 30 // nSDs plotted in kernel function
 entry_position+=1
 
-SetDimLabel 0,entry_position,Kernel_MapPxbyPx,OS_Parameters
-OS_Parameters[%Kernel_MapPxbyPx] = 1 // Kernel map pixel by pixel (1) or bigger ROIs? (0)
-entry_position+=1
-
-SetDimLabel 0,entry_position,Kernel_MapSmth,OS_Parameters
-OS_Parameters[%Kernel_MapSmth] = 0 // nMicrons that kernelmaps get smoothed by
-entry_position+=1
-
-SetDimLabel 0,entry_position,Kernel_MapSDCut,OS_Parameters
-OS_Parameters[%Kernel_MapSDCut] = 2 // Kills ROIs below this SD in maps
-entry_position+=1
-
-SetDimLabel 0,entry_position,Kernel_MapRange,OS_Parameters
-OS_Parameters[%Kernel_MapRange] = 5 // SDs used in the RGBU maps
-entry_position+=1
-
-SetDimLabel 0,entry_position,Kernel_FFTRange,OS_Parameters
-OS_Parameters[%Kernel_FFTRange] = 3 // SDs used in the FFT maps
-entry_position+=1
-
-SetDimLabel 0,entry_position,Kernel_FFTOffset,OS_Parameters
-OS_Parameters[%Kernel_FFTOffset] = 1 // sets n Hz as darkest shade (default: 1Hz)
-entry_position+=1
-
 SetDimLabel 0,entry_position,Noise_Compression,OS_Parameters
 OS_Parameters[%Noise_Compression] = 10 // Noise RF calculation speed up
 entry_position+=1
 
-SetDimLabel 0,entry_position,ROIKernelSmooth_space,OS_Parameters
-OS_Parameters[%ROIKernelSmooth_space] = 1 // ROIKernel Smoothing (pixels)
-entry_position+=1
-
-SetDimLabel 0,entry_position,ROIKernel_seedROI,OS_Parameters
-OS_Parameters[%ROIKernel_seedROI] = 0 // Which ROI is all calculated relative to, default: 0
+SetDimLabel 0,entry_position,nColourChannels,OS_Parameters
+OS_Parameters[%nColourChannels] = 4 // for STRFs and Kernels
 entry_position+=2
 
 
 /// GENERAL ////////////////////////////////////////////////////////////////////////////////////////////////
 
-setdimlabel 0,entry_position,LineDuration,OS_Parameters
-xPixelsInd = FindDimLabel(wParamsNum,0,"User_dxPix" )// Andre 2016 04 14
-yPixelsInd = FindDimLabel(wParamsNum,0,"User_dyPix" )// Andre 2016 04 14
-realPixDurInd = FindDimLabel(wParamsNum,0,"RealPixDur" )// Andre 2016 04 14
-lineDur = (wParamsNum[xPixelsInd] *  wParamsNum[realPixDurInd]) * 10^-6// Andre 2016 04 14
-OS_Parameters[%LineDuration] = lineDur
-entry_position+=1
+if (waveexists($"wParamsNum")==1) // 2P Data taken with ScanM, get timing info from there
+	setdimlabel 0,entry_position,LineDuration,OS_Parameters
+	xPixelsInd = FindDimLabel(wParamsNum,0,"User_dxPix" )// Andre 2016 04 14
+	yPixelsInd = FindDimLabel(wParamsNum,0,"User_dyPix" )// Andre 2016 04 14
+	realPixDurInd = FindDimLabel(wParamsNum,0,"RealPixDur" )// Andre 2016 04 14
+	lineDur = (wParamsNum[xPixelsInd] *  wParamsNum[realPixDurInd]) * 10^-6// Andre 2016 04 14
+	OS_Parameters[%LineDuration] = lineDur
+	entry_position+=1
+else
+	setdimlabel 0,entry_position,LineDuration,OS_Parameters
+	OS_Parameters[%LineDuration] = 0.001 // placehol;der to be overwritten
+	entry_position+=1
+endif
 
-setdimlabel 0,entry_position,'samp_period',OS_Parameters
-sampPeriod = (lineDur* wParamsNum[yPixelsInd])// Andre 2016 04 14
-OS_Parameters[%samp_period] = sampPeriod
-entry_position+=1
-
-setdimlabel 0,entry_position,samp_rate_Hz,OS_Parameters
-sampRate = 1/sampPeriod// Andre 2016 04 14
-OS_Parameters[%samp_rate_Hz] = sampRate
-entry_position+=1
-
-SetDimLabel 0,entry_position,FOV_at_zoom065,OS_Parameters
-OS_Parameters[%FOV_at_zoom065] = 110 // Size of full field of view at zoom 0.65, in microns. Setup 1: 110 microns
-entry_position+=1
 
 SetDimLabel 0,entry_position,Data_Channel,OS_Parameters
 OS_Parameters[%Data_Channel] = 0 // Fluorescence Data in wDataChX - default 0
@@ -327,45 +279,16 @@ entry_position+=1
 
 SetDimLabel 0,entry_position,Trigger_LevelRead_after_lines,OS_Parameters
 OS_Parameters[%Trigger_levelread_after_lines] = 2  // to read "Triggervalue" - want to avoid landing on the slope of the trigger - default 2
+entry_position+=2
+
+/// REGISTERING /////////////////////////////////////////////////////////////////////////////////////////////
+
+SetDimLabel 0,entry_position,registration_averageN,OS_Parameters
+OS_Parameters[%Registration_AverageN] = 10 // Downsampling to speed up
 entry_position+=1
 
-
-/// STIMULATOR DELAY
-
-SetDimLabel 0,entry_position,StimulatorDelay,OS_Parameters
-//get some variables, 
-//like the computer name (indicates which setup was used)
-pcName = FindDimLabel(wParamsStr,0,"ComputerName" )
-
-//print setup
-setup = wParamsStr['pcName']
-//and date of the recording
-recDay = FindDimLabel(wParamsStr,0,"DateStamp_d_m_y" )
-recDate = wParamsStr['recDay']
-//convert each part of the string to numbers
-year = str2num(recDate[0,3])
-month=str2num(recDate[5,7])
-day = str2num(recDate[7,9])
-
-if (stringmatch(setup,"euler14_01")) // SETUP 1
-		OS_Parameters[%StimulatorDelay] = 0// nMilliseconds delay of the stimulator between the trigger and the 
-   											 // light actually hitting the tissue. for Arduino stimulator this is 0ms
-   											  
-elseif (stringmatch(setup,"euler14_lab2-1"))		  // SETUP 2
-	if (year < 2016)
-		OS_Parameters[%StimulatorDelay] = 27  // old stimulator software (using directx) written in Pascal is 27,
-	elseif (year == 2016)
-		if (month <= 4 && day <= 24)
-			OS_Parameters[%StimulatorDelay] = 27  // old stimulator software (using directx) written in Pascal is 27,
-		else
-			OS_Parameters[%StimulatorDelay] = 100//new python software (using openGL) installed 25th April 2016) is 100 ms
-		endif
-	else
-		OS_Parameters[%StimulatorDelay] = 100//new python software (using openGL) installed 25th April 2016) is 100 ms
-	endif
-else										  // SETUP 3 (downstairs)
-	OS_Parameters[%StimulatorDelay] = 0  // Right now only has Arduino stimulator on it
-endif
+SetDimLabel 0,entry_position,Registration_skipN,OS_Parameters
+OS_Parameters[%Registration_SkipN] = 10 // register using every n images
 entry_position+=2
 
 /// redimension the OS_parameter table, so it doesn't have trailing NaN's

@@ -38,7 +38,7 @@ variable noise_interval = OS_Parameters[%Noise_interval_sec] // refresh time of 
 variable Noise_Threshold = OS_Parameters[%Noise_EventSD] // nSD over baseline in time differential //read from OS_Parameters
 variable nSeconds_kernel = OS_Parameters[%Noise_FilterLength_s] // nSD over baseline in time differential //read from OS_Parameters
 variable nSDplot = OS_Parameters[%Kernel_SDplot] // nSD plotted in overview on y axis
-
+variable nLEDs = OS_Parameters[%nColourChannels] 
 
 // data handling
 wave NoiseArray4LEDs // official stimulus array
@@ -63,7 +63,7 @@ variable suppressSD = 1
 // calculating basic parameters
 variable nP_stim = Dimsize(NoiseArray4LEDs,0)
 variable nP_data = Dimsize(InputTraceTimes,0)
-variable nLEDs = Dimsize(NoiseArray4LEDs,1)
+//variable nLEDs = Dimsize(NoiseArray4LEDs,1)
 variable nTriggers = Dimsize(Triggertimes,0)
 variable timebase_s_stim =noise_interval
 variable timebase_s_data = InputTraceTimes[1][0]-InputTraceTimes[0][0]

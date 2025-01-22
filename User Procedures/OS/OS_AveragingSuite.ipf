@@ -101,24 +101,6 @@ for (pp=0;pp<nPlanes;pp+=1)
 	killwaves TempStack2
 endfor
 
-//variable nY_per_plane = nY / nPlanes
-//make /o/n=(nX * nSubStacks,nY_per_plane,nF_SubStacks * nPlanes) AverageStack0_Chopped_byPlane = NaN
-//make /o/n=(nX ,nY_per_plane,nF_SubStacks * nPlanes * nSubStacks) AverageStack0_DoubleChopped = NaN
-//for (pp=0;pp<nPlanes;pp+=1)
-//	variable Currentplane = pp + (AverageStack_FirstPlane -1)
-//	if (CurrentPlane > (nPlanes-1))
-//		CurrentPlane-=nPlanes
-//	endif
-//	make /o/n=(nX * nSubStacks,nY_per_plane,nF_SubStacks) TempStack = AverageStack0_Chopped[p][q+CurrentPlane*nY_per_Plane][r]
-//	AverageStack0_Chopped_byPlane[][][pp*nF_SubStacks,(pp+1)*nF_SubStacks-1]=TempStack[p][q][r-pp*nF_SubStacks]
-//	for (ss=0;ss<nSubStacks;ss+=1)
-//		SubStart = TriggerTimes_Frame[ss*AverageStack_Chopup] - TriggerTimes_Frame[0] 
-//		make /o/n=(nX,nY_per_plane,nF_SubStacks) TempStack2 = TempStack[p+ss*nX][q][r]
-//		AverageStack0_DoubleChopped[][][pp*nF_SubStacks*nSubStacks+ss*nF_SubStacks,pp*nF_SubStacks*nSubStacks+(ss+1)*nF_SubStacks-1]=TempStack2[p][q][r-(pp*nF_SubStacks*nSubStacks+ss*nF_SubStacks)]
-//	endfor
-//	killwaves TempStack2
-//endfor
-
 if (AverageStack_SavePlanes==1)
 	imagesave /s/f/t="tiff" AverageStack0_Chopped_byPlane
 endif
@@ -166,11 +148,11 @@ if (waveexists($"Triggertimes")==0)
 	DoUpdate
 endif
 // 5 //  check if Averages"N" is there
-if (waveexists($"Averages"+Num2Str(Channel))==0)
-	print "Warning: Averages wave not yet generated - doing that now..."
-	OS_BasicAveraging()
-	DoUpdate
-endif
+//if (waveexists($"Averages"+Num2Str(Channel))==0)
+	//print "Warning: Averages wave not yet generated - doing that now..."
+	//OS_BasicAveraging() - makes it loop if AverageStack0 not jet made...
+	//DoUpdate
+//endif
 // 6 //  check if AverageStack0" is there
 if (waveexists($"AverageStack"+Num2Str(Channel))==0)
 	print "Warning: AverageStack0 wave not yet generated - please compute that first..."
