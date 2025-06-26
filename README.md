@@ -1,10 +1,10 @@
 # Igor_scripts
-Repository for the standard Baden lab OS scripts
+Repository for the standard Baden lab OS scripts. Contents are current as of: 26.06.2025
 
 # Installation
 Simply drag and drop the User Procedures and Igor Procedures into the Igor Pro 9 User Files, which by default can be find under `C:\Users\user\Documents\WaveMetrics\Igor Pro 9 User Files\`. 
 
-Note: There's no longer any need to mess around inside `C:\Program Files\WaveMetrics\Igor Pro 9 Folder\` anymore, as Igor 9 seems to perfectly handle importing the files correctly from the path above. 
+Note: There's no longer any need to mess around inside `C:\Program Files\WaveMetrics\Igor Pro 9 Folder\`, as Igor 9 seems to perfectly handle importing the files correctly from the path above. 
 
 # User customisation
 These scripts have been shared back and forth over the years, so you may find some discrepancies or differences to how you have your own scripts set up. 
