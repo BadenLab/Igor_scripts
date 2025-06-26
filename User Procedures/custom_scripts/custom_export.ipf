@@ -1,5 +1,5 @@
 #pragma rtGlobals=3		// Use modern global access method and strict wave access.
-
+// Last author: Simen Bruoygard 
 Function OS_hdf5Export_custom()
 
 	// WARNING- currently not exporting the StimArtifactwave -needs to update at somepoint

@@ -1,7 +1,7 @@
 #pragma rtGlobals=3		// Use modern global access method and strict wave access.
 #include "OS_BasicAveraging"
 
-
+// Author: Simen Bruoygard 
 
 function chroma_average(Averages0Wave, split_int)
 	wave Averages0Wave

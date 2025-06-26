@@ -2,6 +2,7 @@
 //  TransposeLayersAndChunks(w4DIn)
 //  Transposes the layer and chunk dimensions of a 4D wave.
 //  NOTE: Overwrites output wave.
+// Author: Simen Bruoygard
 Function TransposeLayersAndChunks(w4DIn, nameOut)
     Wave w4DIn               // Name of input wave
     String nameOut          // Desired name for new wave

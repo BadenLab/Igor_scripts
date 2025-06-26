@@ -1,6 +1,6 @@
 #pragma rtGlobals=3		// Use modern global access method and strict wave access.
 
-
+// Author: Simen Bruoygard 
 function ROI_overlay([alpha])
 variable alpha
 if (paramIsDefault(alpha))

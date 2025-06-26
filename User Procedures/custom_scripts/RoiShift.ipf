@@ -1,5 +1,5 @@
 #pragma rtGlobals=3		// Use modern global access method and strict wave access.
-
+// Author: Simen Bruoygard 
 function ROIShift(xshift,yshift)
 variable xshift,yshift
 
