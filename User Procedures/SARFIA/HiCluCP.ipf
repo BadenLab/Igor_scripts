@@ -1,268 +1,467 @@
 #pragma rtGlobals=1		// Use modern global access method.
-#include "HClu"
-#include "REsultsByCoef"
+#include "Z-Project"
+#include "CenterOfMass_custom"
+
+Function/Wave NormalizeTraces(PopWave, options)
+	Wave PopWave
+	Variable Options //bit0 - normalise 0 to 1, bit1 - divide by SD
+	
+	Variable YDim, ii
+
+	YDim=DimSize(PopWave,1)
+
+	Duplicate/o/Free PopWave, trace, PopNorm
+	Redimension /n=(-1) trace
+	
+	For(ii=0;ii<YDim;ii+=1)
+		trace=PopWave[p][ii]
+		
+		if(options & 1)	//morm 0-1
+			WaveStats/Q/m=2 trace
+			trace-=v_min
+			trace/=(v_max-v_min)
+		endif
+		
+		if(options & 2)		//div SD?
+			WaveStats/Q/m=2 trace
+			trace /= v_Sdev
+		endif
+		
+		
+		PopNorm[][ii]=trace[p]
+	EndFor
+
+	String ResultName=NameOfWave(PopWave)+"_NT"
+	Duplicate/o PopNorm $Resultname
+	Return $ResultName
+End
+
+////////////////////////////////////////////////
+Function/Wave BinPop(popWave,resultname,nBins, [smth])	
+	Wave popWave
+	string resultname
+	Variable nBins, smth
+	
+	
+	variable npts = dimsize(popWave,0), ntraces = dimsize(popWave,1), ii, bl, jj, binSize, wmin, wmax
+	
+		
+	if(ntraces < 1)
+		ntraces = 1
+	endif
+	
+	Duplicate /o/free PopWave, pop, trace, NorPop
+	redimension /n=(-1) trace
+	Make/free/o Histo
+	Make/o/n=(ntraces)/free w_BL
+	
+	if(!paramisdefault(smth))
+		Smooth smth,  PopWave
+	endif
+	
+	
+	for(ii=0;ii<ntraces;ii+=1)
+		trace = pop[p][ii]
+		wmin=wavemin(trace)
+		wmax=wavemax(trace)
+		
+		BinSize=(wmax-wmin)/nBins
+		
+		for(jj=0;jj<nBins;jj+=1)
+			
+			NorPop[][ii]=SelectNumber(trace[p]>=WMin+jj*BinSize && trace[p]<=wmin+(jj+1)*BinSize, NorPop[p][ii] ,jj)
+		
+			
+		endfor
+	endfor
+	
+	Duplicate /o NorPop, $resultname
+	
+	Wave w=$ResultName
+	Return w
+End
 
 
-Function AutoCluster(PopWave, Options)
+////////////////////////////////////////////////
 
+
+
+Function/Wave PopDistances(PopWave,options)
 	Wave PopWave
 	Variable Options //0=Euclidean, 1=Chebyshev, 2=Hamming/Bin, 3=Binning, 4=normalised Euclidean, 5=Pearson
 					//6=Manhattan
-	
-	Wave Normalised=NormalizeTraces(PopWave,1)
-	
-	Wave DistanceMatrix=PopDistances(Normalised, Options)
-	
-	Wave DM2C=DistanceMatrix2Column(DistanceMatrix,index=1)
-	
-	Wave SortedDM=SortByFirst(DM2C,0)
-	
-//	Display /k=1 SortedDM[][0]
-	
-	
-End
 
-///////////////////////////////////////
+	Variable YDim, ii, XDim, jj
 
+	YDim=DimSize(PopWave,1)
+	XDim=DimSize(PopWave,0)
 
-Function ClusteringCP()
-
-	String PopWaveName="", OptionStr, Select="", CutoffStr
-	String CatName, WvName
-	Variable Normalise=0, Option, Cutoff
-	Variable MinDist, MaxDist, nClusters, ii, jj, nItems, DisplaySingles=0
+	Make/o/Free/n=(YDim,YDim,XDim) DistanceMatrix3D
+	Make/o/Free/n=(YDim,YDim) DistanceMatrix
+	Duplicate/o/Free PopWave, trace, trace2
+	redimension /n=(-1) trace,trace2
 	
-	DFREF SaveDFR=GetDataFolderDFR(), WF
 	
-	if(DataFOlderExists("root:Clustering"))
-		WF=root:Clustering
-	else
-		NewDataFolder root:Clustering
-		WF=root:Clustering
-	endif
-
-
-	OptionStr="Pearson;Euclidean;Normalised Euclidean;Chebyshev;Hamming;Binned Data;Manhattan"
-
-	Prompt PopWaveName,"Which DataSet to Analyse?",popUp,WaveList("*",";","DIMS:2")
-	Prompt Select, "Choose Metric",popUp, OptionStr
-	Prompt Normalise, "Normalise Data (0/1)?"
-	Prompt DisplaySingles, "Display clusters with a single trace (0/1)?"
-
-	DoPrompt "Hierarchical clustering", PopWaveName, Select, normalise, DisplaySingles
-	
-	if(v_flag)
-		SetDataFolder SaveDFR
-		return -1
-	endif
-
-
-	StrSwitch (Select)
-		Case "Euclidean":
-			Option=0
+	Switch(options)
+		Case 0:	//Euclidean	
+			MultiThread DistanceMatrix3D = (PopWave[r][p]-PopWave[r][q])^2
+			MatrixOP/o/free DistanceMatrixSq = sumbeams(DistanceMatrix3D)
+			MatrixOP/o/free DistanceMatrix=Sqrt(DistanceMatrixSq)		
 		Break
 		
-		Case "Chebyshev":
-			OPtion=1
+		Case 1:	//Chebyshev
+			MultiThread DistanceMatrix3D = Abs(PopWave[r][p]-PopWave[r][q])
+			Wave MaximumWv=MaxZ(DistanceMatrix3D,"MaxWv")
+			Duplicate/o MaximumWv, DistanceMatrix
+			KillWaves /z MaximumWv
 		Break
 		
-		Case "Hamming":
-			Option=2
+		
+		Case 2:	//Hamming
+			Wave BinnedPop=PopWave
+			MultiThread DistanceMatrix3D = Abs(BinnedPop[r][p]-BinnedPop[r][q])
+			DistanceMatrix3D=SelectNumber(DistanceMatrix3D>=1,0,1)				//Not weighed by the degree of difference
+						
+			MatrixOP/o/free DistanceMatrix = sumbeams(DistanceMatrix3D)
+					
+			Duplicate/o Distancematrix3d dm3d
+			KillWaves/z BinnedPop, M_AveImage, M_StdvImage
 		Break
 		
-		Case "Binned Data":
-			Option=3
+		Case 3:	//Binning
+			Wave BinnedPop=BinPop(PopWave,"Binned",5,smth=5)
+			MultiThread DistanceMatrix3D = Abs(BinnedPop[r][p]-BinnedPop[r][q])
+			MatrixOP/o/free DistanceMatrixSq = sumbeams(DistanceMatrix3D)
+			MatrixOP/o/free DistanceMatrix=Sqrt(DistanceMatrixSq)		
+		
+			Duplicate/o Distancematrix3d dm3d
+			KillWaves/z BinnedPop, M_AveImage, M_StdvImage
 		Break
 		
-		Case "Normalised Euclidean":
-			Option=4
+		Case 4:	//normalised Euclidean	
+			MultiThread DistanceMatrix3D = (PopWave[r][p]-PopWave[r][q])^2			
+			ImageTransform averageImage DistanceMatrix3D
+			Wave/z M_AveImage, M_StdvImage
+			DistanceMatrix=Sqrt(M_AveImage*XDim/M_StdvImage)		//Sum = Average * n
+			KillWaves/z M_AveImage, M_StdvImage
 		Break
 		
-		Case "Pearson":
-			Option=5
-		Break	
+		Case 5://Pearson R
+			For(ii=0;ii<YDim;ii+=1)
+				For(jj=0;jj<YDim;jj+=1)
+					trace=PopWave[p][jj]
+					trace2=PopWave[p][ii]
+					
+					 DistanceMatrix[ii][jj]=1-(StatsCorrelation(trace,trace2))		//1-... so that biggest similarity equals 0 (i.e. least distance)
+				
+				EndFor
+			EndFor	
+		Break
 		
-		Case "Manhattan":
-			Option=6
+		Case 6:	//Manhattan	
+			MultiThread DistanceMatrix3D = abs(PopWave[r][p]-PopWave[r][q])
+			MatrixOP/o/free DistanceMatrix = sumbeams(DistanceMatrix3D)
 		Break
 		
 		
 	EndSwitch
 	
-	SetDataFolder WF
+
+	String ResultName=NameOfWave(PopWave)+"_DM"
+	Duplicate/o DistanceMatrix $ResultName
+	Return $ResultName
+End
+
+////////////////////////////////////////////////
+
+Function/Wave HiClu(Sorted,cutoff)
+	Wave Sorted
+	Variable CutOff
 	
-	Wave PopWave=SaveDFR:$PopWaveName
 	
-	if(Normalise==0)
+	Variable nItems, ii, Distance, nClusters=0
+	Variable Val1,Val2, Index1,Index2, nPairs
+	Variable CurrentClu, nClu, MaxVal, MinVal
+	
+	nPairs=DimSize(Sorted,0)
+	
+	ImageStats /m=1/g={0,nPairs-1,1,2} Sorted
+	nItems=v_Max+1
+	
+	Make/o/n=(nItems) Clusters=p
+	
+	
+	ii=0
+	Do
+		Distance=Sorted[ii][0]
 		
-		Wave Normalised=PopWave
+		Val1=Sorted[ii][1]
+		Val2=Sorted[ii][2]
 		
-	Else
-	
-		Wave Normalised=NormalizeTraces(PopWave,1)
-	
-	Endif
-	
-	Wave DistanceMatrix=PopDistances(Normalised, Option)
-	
-	Wave DM2C=DistanceMatrix2Column(DistanceMatrix,index=1)
-	
-	Wave SortedDM=SortByFirst(DM2C,0)
-	
-	String GraphHisto, GraphMatrix
+		Index1=Clusters[Val1]
+		Index2=Clusters[Val2]
+		
+		MaxVal=Max(Val1,Val2)
+		MinVal=Min(Index1,Index2)
+		
 
-	ImageStats /m=1/g={0,DimSize(SortedDM,0)-1,0,0} SortedDM
-	MinDist=v_min
-	MaxDist=v_max
-	CutOff=30
-
-	Display/k=1/w=(20,20,420,220) SortedDM[][0]
-	GraphHisto=S_name
-	ModifyGraph swapXY=1
-	Label left, "Pairs"
-	Label bottom, "Distance"
-	Display/k=1/w=(60,300,360,600);AppendImage DistanceMatrix
-	GraphMatrix=S_Name
-	DoUpDate
-	SizeImage(300)
-	DoUpDate
-	
-	
-	Variable wm = WaveMax(DistanceMatrix)
-	CutOff = wm/3
-
-	sPrintf CutoffStr, "Cutoff to merge clusters? Maximum value = %f",wm
-	
-
-	Prompt CutOff, CutoffStr
-	DoPrompt "Cutoff", Cutoff
+		MultiThread Clusters=SelectNumber(Clusters==MaxVal,Clusters[p],MinVal)		//nearest neighbor
 
 	
+		ii+=1
+	While(Distance<Cutoff)
 	
-	if(v_flag)		//user canceled
-		KillWindow $GraphHisto
-		KillWindow $GraphMatrix
-		SetDataFolder SaveDFR
-		return -1
+
+	
+	Renumber1D(Clusters)		//remove empty clusters
+	
+
+	Return Clusters
+End
+	
+/////////////////////////////////////////
+Function/Wave HiClu2D(Sorted)
+	Wave Sorted
+
+	
+	Variable nItems, ii, Distance, nClusters=0
+	Variable Val1,Val2, Index1,Index2, nPairs
+	Variable CurrentClu, nClu=0, MaxVal, MinVal
+	
+	Variable jj, Cutoff
+	
+	nPairs=DimSize(Sorted,0)
+	
+	ImageStats /m=1/g={0,nPairs-1,1,2} Sorted
+	if(v_Flag==-1)
+		Abort "ImageStats wrong in HiClu2D"
 	endif
 	
-	String ReorganisedStr=NameOfWave(PopWave)+"_mod"
+	nItems=v_Max+1
 	
+	Make/o/n=(nItems)/free Clusters=p
+	Make/o/n=(nItems,nPairs) Clusters2D=NaN, TestWv
+	Make /o Cluster_Dist
 	
-
-	Wave Clusters=HiClu(SortedDM,cutoff)
-	
-	nClusters=WaveMax(Clusters)+1
-	
-	
-	For(ii=0;ii<nClusters;ii+=1)
-		Wave Results=PopByCat(Normalised,Clusters,ii)
+	For(jj=0;jj<nPairs;jj+=1)
+		CutOff=Sorted[jj][0]
+		ii=0
 		
-		if(ii==0)
-			duplicate/o Results, $ReorganisedStr
-			Wave PWMod=$ReorganisedStr
-		else
-			Concatenate {Results}, PWMod
-		endif
-	
-		CatName="Category"+Num2Str(ii)
-		
-		Duplicate/o Results $CatName
-		Wave LatestCat=$CatName
-		
-		PopStats2(LatestCat,CatName)
-		
-		nItems=DimSize(LatestCat,1)
-		
-		
-		
-		if(nItems<2 && DisplaySingles > 0)
-			Display/k=1;
-			WvName=CatName+"_Avg"
-		
-			AppendToGraph $WvName
-			ModifyGraph lsize($WvName)=3,rgb($WvName)=(0,0,0)
+		Do
+			Distance=Sorted[ii][0]
 			
-		elseif(nItems<2 && DisplaySingles <= 0)
-			//do nothing
+			Val1=Sorted[ii][1]
+			Val2=Sorted[ii][2]
 			
-		Else
-			Display/k=1;
-			For(jj=0;jj<nItems;jj+=1)
+			Index1=Clusters[Val1]
+			Index2=Clusters[Val2]
 			
-				AppendToGraph LatestCat[][jj]
+			MaxVal=Max(Val1,Val2)
+			MinVal=Min(Index1,Index2)
 			
-			EndFor
 		
-		WvName=CatName+"_Avg"
+			MultiThread Clusters=SelectNumber(Clusters==MaxVal,Clusters[p],MinVal)		//nearest neighbor
+			
 		
-		AppendToGraph $WvName
-		ModifyGraph lsize($WvName)=3,rgb($WvName)=(0,0,0)
+			
 		
+			ii+=1
+		While(Distance<Cutoff)
+	
+	
+	Renumber1D(Clusters)		//remove empty clusters
+	
+//	Clusters2D[][nClu]=Clusters[p]
+//	nClu+=1
+	
+		if(jj>0)
+			TestWv=Clusters2D[p][nClu-1]-Clusters[p]
+			
+			if(WaveMax(TestWv)!=0)
+				Clusters2D[][nClu]=Clusters[p]
+				Cluster_Dist[nClu]={cutoff}
+				nClu+=1
+				
+			endif
+			
+		else	//jj==0
+			Clusters2D[][nClu]=Clusters[p]
+			Cluster_Dist[nClu]={cutoff}
+			nClu+=1
+			
 		Endif
-		
-		
+
 	
+	
+		if(WaveMax(Clusters)==0)
+			break
+		endif
+
 	EndFor
+		
+		DeletePoints /m=1 nClu,nPairs-nClu, clusters2D
+		
+		
 	
-	Deletepoints/m=1 0,1,PWMod
-	
-	Edit/k=1 Clusters
-	KillWaves/z results
-	
-	SetDataFolder SaveDFR
+	Return Clusters2D
 End
 
 
 
+/////////////////////////////////////////
 
-///////////////////////////
+Function/Wave SortByFirst(DM2C,rev)
+	Wave DM2C
+	Variable rev
+	
+	Duplicate/o/Free DM2C wv1,wv2,wv3, Sorted
+	redimension/n=(-1) wv1,wv2,wv3
+	
+	wv1=DM2C[p][0]
+	wv2=DM2C[p][1]
+	wv3=DM2C[p][2]
+	
+	Variable nPts=WaveMax(wv2)+1, nPairs=DimSize(DM2C,0)
 
-Static Function PopStats2(PopWave,BaseName)
-	Wave PopWave
-	String BaseName
-	String name
-	Variable ii, numTraces, numPoints
-	numTraces=Dimsize(PopWave,1)
-	numPoints=DimSize(PopWave,0)
+	
+	if(rev)
+		sort/r wv1,wv1,wv2,wv3
+		DeletePoints 0,nPts, Sorted, wv1,wv2,wv3
+	else
+		sort wv1,wv1,wv2,wv3
+		DeletePoints nPairs-nPts,nPts, Sorted, wv1,wv2,wv3
+	endif
 	
 	
+	Sorted[][0]=wv1[p]
+	Sorted[][1]=wv2[p]
+	Sorted[][2]=wv3[p]
 	
-	Duplicate /o/free PopWave, W_PopAvg, W_PopSD, W_PopSEM
-	Redimension /n=(-1) W_PopAvg, W_PopSD, W_PopSEM
-	W_PopAvg = 0
-	W_PopSD = 0
+	String newname=NameofWave(DM2C)+"_s"
+	Duplicate/o Sorted, $newname
+	Wave w=$newname
+	Return w
+End
+
+
+/////////////////////////////////////////
+
+//Static
+// Function FirstEmptyInCol(wv,Col)
+//	Wave wv
+//	Variable Col
+//
+//	Variable nRows=DimSize(wv,1), ii, val
+//	
+//	For(ii=0;ii<nRows;ii+=1)
+//	
+//		val=wv[ii][Col]
+//		if(numType(val)==2)
+//			return ii
+//		endif
+//	
+//	EndFor
+//
+//
+//	Return -1	//row full
+//End
+
+/////////////////////////////////////////
+
+//Function Renumber1D(wv)			//slightly slower than histogram approach
+//	wave wv
+//	
+//	Variable Wmax, ii, wMin
+//	
+//	Wmax=WaveMax(wv)
+//	WMin=WaveMin(wv)
+//	
+//	
+//	For(ii=Wmax;ii>=Wmin;ii-=1)
+//	
+//		FindValue /v=(ii) wv
+//		if(v_value==-1)		//value not found
+//			MultiThread wv=SelectNumber(wv[p]>ii,wv[p],wv[p]-1)
+//		
+//		endif
+//	EndFor
+//	
+//End
+
+/////////////////////////////////////////
+
+Function Renumber1D(wv)
+	wave wv
 	
-	if(numtraces<2)
-		W_PopAvg=PopWave
+	Variable Wmax, ii, wMin, npts, value, num=0, val=0	
+		
+	Wmax=waveMax(wv)
+	WMin=WaveMin(wv)
+	npts=WMax-WMin
+	
+	if(npts < 2)	//no sorting needed
+		return -1
+	endif
+	
+	make/n=(npts)/o/free Histo
+	
+	Histogram /b={WMin, 1, WMax} wv, Histo
+	
+	WaveStats/m=1/q wv
+	
+	if(v_npnts >= 1e3)		//empirically determined value on my 2GHz Core 2 Duo Mini Mac
+	
+		For(ii=npts-1;ii>=0;ii-=1)
+		
+			
+			num=Histo[ii]
+			val=ii*DimDelta(Histo,0)+DimOffset(Histo,0)
+		
+			if(num<1)		//value not found
+				MultiThread wv=SelectNumber(wv[p]>=val,wv[p],wv[p]-1)
+			
+			endif
+		EndFor
+		
 	else
 	
-	
-	
-		For(ii=0;ii<numTraces;ii+=1)
+		For(ii=npts-1;ii>=0;ii-=1)
 		
-			W_PopAvg+=PopWave[p][ii]/numTraces
-		
-		EndFor
-		
-		For(ii=0;ii<numTraces;ii+=1)
-		
-			MultiThread W_PopSD[]+=(PopWave[p][ii]-W_PopAvg[p]) ^2
 			
+			num=Histo[ii]
+			val=ii*DimDelta(Histo,0)+DimOffset(Histo,0)
 		
+			if(num<1)		//value not found
+				wv=SelectNumber(wv[p]>=val,wv[p],wv[p]-1)
+			
+			endif
 		EndFor
-		
-		MultiThread W_PopSD=sqrt(W_PopSD*(1/(NumTraces-1)))
-		MultiThread W_PopSEM=W_PopSD/Sqrt(NumTraces)
 	
-	Endif
 	
-	name=baseName+"_Avg"
-	Duplicate/o W_PopAvg $name
-	 name=baseName+"_SD"
-	Duplicate/o W_PopSD $name
-	name=baseName+"_SEM"
-	Duplicate/o W_PopSEM $name
+	endif
+	
+End
 
+
+
+/////////////////////////////////////////
+
+Function ClusterDisplay2D(Clusters2D, Dist)
+	Wave Clusters2D, Dist
+	
+	Variable ii, nNodes
+	
+	nNodes=DimSize(Clusters2D,0)
+	
+	Display/k=1
+	For(ii=0;ii<nNodes;ii+=1)
+		AppendTograph Clusters2D[ii][] vs dist
+	
+	
+	EndFor
+
+	ModifyGraph swapXY=1
+	Label Bottom, "Trace Number"
+	Label Left, "Distance"
 
 End

@@ -16,24 +16,60 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 function OS_STRFs_new()
+	wave OS_parameters
+	wave noise_jitter
+	// OS params additions by Simen Bruoygard
+	// Handle annoying array naming blunder that I am too lazy to go back and fix - Simen
+	if (waveexists(noise_jitter) == 1)
+		print "Identified noise_jitter array, renaming to noisearray3d for processing"
+		rename noise_jitter, noisearray3d
+	endif
 
+	// Set some default values for backwards compatability, in case vals are not in OS_parameters  - Simen
+	variable nColours
+	if (finddimlabel(OS_parameters, 0, "nColourChannels") == -2)
+		nColours = 4
+		print "nColourChannels not found in OS_parameters, defaulting to nColours ==", nColours
+	else
+		nColours = OS_parameters[%nColourChannels]
+		print "nColours:", nColours
+	endif
+		
+	variable nTriggers_per_Colour 
+	if (finddimlabel(OS_parameters, 0, "STRF_nTriggers_per_Colour") == -2)
+		nTriggers_per_Colour = 100
+		print "STRF_nTriggers_per_Colour not found in OS_parameters, defaulting to nTriggers_per_Colour =", nTriggers_per_Colour
+	else 
+		nTriggers_per_Colour = OS_parameters[%STRF_nTriggers_per_Colour]
+		print "nTriggers_per_Colour", nTriggers_per_Colour
+	endif
 
-	variable nColours = 4
-	variable nTriggers_per_Colour = 100
+	variable CropNoiseEdges
+	if (finddimlabel(OS_parameters, 0, "STRF_edge_crop") == -2)
+		CropNoiseEdges = 2 //20 for 25um(=1.18deg) // HACK FOR NOW
+		print "STRF_edge_crop not found in OS_parameters, defaulting to CropNoiseEdges =", CropNoiseEdges
+	else
+		CropNoiseEdges = OS_parameters[%STRF_edge_crop]
+		print "CropNoiseEdges:", CropNoiseEdges
+	endif
+	
+	variable nF_Max_per_Noiseframe
+	if (finddimlabel(OS_parameters, 0, "nF_Max_per_Noiseframe") == -2)
+		print "nF_Max_per_Noiseframe not found in OS_parameters, defaulting to nF_Max_per_Noiseframe =", nF_Max_per_Noiseframe
+		nF_Max_per_Noiseframe = 8 // how many frames between triigers is allowed as a noise frame
+	else
+		nF_Max_per_Noiseframe = OS_parameters[%nF_Max_per_Noiseframe]
+		print "nF_Max_per_Noiseframe", nF_Max_per_Noiseframe
+	endif
 	
 	variable RGB_Attenuation = 20 // the larger, the more attenuated the RGB RFs will come out
 
 //////// NEW VARIABLEWS NOT IMPLEMENTED FULLY YET
 
-	variable CropNoiseEdges = 2 //20 for 25um(=1.18deg) // HACK FOR NOW
 	variable preSDProjectSmooth = 0
 	
 	variable adjust_by_pols = 1
 	
-	variable nF_Max_per_Noiseframe = 8 // how many frames between triigers is allowed as a noise frame - hardcode
-
-
-
 
 // 0 //  check if NoiseArray3D is there
 if (waveexists($"NoiseArray3D")==0)
@@ -78,7 +114,7 @@ variable LineDuration = OS_Parameters[%LineDuration]
 variable Noise_PxSize = OS_Parameters[%Noise_PxSize_degree]
 variable Event_SD = OS_Parameters[%Noise_EventSD]
 variable FilterLength = OS_Parameters[%Noise_FilterLength_s]
-variable Hz = OS_Parameters[%samp_rate_Hz]
+//variable Hz = OS_Parameters[%samp_rate_Hz]
 variable Skip_First_Trig = OS_Parameters[%Skip_First_Triggers]
 variable Skip_Last_Trig = OS_Parameters[%Skip_Last_Triggers]
 
@@ -100,7 +136,8 @@ print nTriggers, "Triggers found"
 
 
 
-// Identify first and last trigger and select accordingly
+// Identify first and last trigger and select accordingly --> Variables here are just for printing, and do not get used later.
+// Instead, check the for loop for triggers in STA-calculation section, where the OS_Param skip first/last params are used to define loop. 
 //# First trigger
 variable firsttrigger_f // first trigger frame
 if (Skip_First_Trig != 0)
@@ -135,20 +172,10 @@ endif
 duplicate /o $input_name InputStack
 duplicate /o $traces_name InputTraces
 duplicate /o $tracetimes_name InputTraceTimes
-// Get rid of trace data where we have asked OS Params to ignore n first triggers
-//DeletePoints /m=2 0,firsttrigger_f, InputStack
-//DeletePoints 0,firsttrigger_f, InputTraces
-//DeletePoints 0,firsttrigger_f, InputTraceTimes
 
-// Crop NoiseArray3D and Triggertimes_Frame accordingly (but only if OS Params set accordingly, otherwise no point)
-//if (Skip_Last_Trig != 0 || Skip_First_Trig != 0) // belive it or not but this is an OR statement! 
-//	Duplicate/O/R=[firsttrigger_f, nTriggers - lasttrigger_f] Triggertimes_frame test_wav
-//endif 
-
-// Before determining nF, Make 'OS_Parameters' IgnoreLastXseconds have an effect 
+// TODO: Before determining nF, Make 'OS_Parameters' IgnoreLastXseconds have an effect 
 /// Initial nF
 variable nF = DimSize(InputTraces,0)
-
 
 variable nRois = DimSize(InputTraces,1)
 variable nY = DimSize(InputStack,1)
@@ -176,8 +203,8 @@ make /B/o/n=(nX_Noise-CropNoiseEdges*2,nY_Noise-CropNoiseEdges*2,nF) NoiseStimul
 variable nLoops = ceil(nTriggers / nZ_Noise)
 print nLoops, "Loops detected"
 
-variable TriggerCounter = 0
-for (tt=Skip_First_trig; tt < nTriggers-1 - Skip_Last_trig - Skip_First_trig; tt+=1) // Can hijack this and change tt conditionally
+variable TriggerCounter = 0 
+for (tt=Skip_First_trig; tt < nTriggers-1 - Skip_Last_trig - Skip_First_trig; tt+=1) // tt is defined based on trigger skipping params -Simen
 	
 	variable currentstartframe = triggertimes_frame[tt]
 	variable currentendframe = triggertimes_frame[tt+1]

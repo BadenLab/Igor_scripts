@@ -19,10 +19,8 @@ endif
 // flags from "OS_Parameters"
 variable X_cut = OS_Parameters[%LightArtifact_cut]
 variable LineDuration = OS_Parameters[%LineDuration]
-variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullFOVSize]/0.5)
 
 // data handling
-wave wParamsNum // Reads data-header
 string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 duplicate /o $input_name InputData
 variable nX = DimSize(InputData,0)
@@ -32,12 +30,6 @@ variable Framerate = 1/(nY * LineDuration) // Hz
 variable Total_time = (nF * nX ) * LineDuration
 print "Recorded ", total_time, "s @", framerate, "Hz"
 variable xx,yy,ff // initialise counters
-
-// calculate Pixel / ROI sizes in microns
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-print "Pixel Size:", round(px_size*100)/100," microns"
-
 
 make /o/n=(nX,nY) ROIs = 1 // empty ROI wave
 // make SD average
@@ -52,9 +44,7 @@ if (waveexists($"Stack_SD")==0)
 		endfor
 	endfor
 endif
-setscale /p x,-nX/2*px_Size,px_Size,"µm" ROIs, Stack_SD
-setscale /p y,-nY/2*px_Size,px_Size,"µm"  ROIs, Stack_SD
-	
+
 // display SD wave
 Display /k=1 
 Appendimage Stack_SD
@@ -82,25 +72,13 @@ if (waveexists($"OS_Parameters")==0)
 endif
 wave OS_Parameters
 
-// flags from "OS_Parameters"
-variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065]
-
 // data handling
 wave M_ROIMask
 variable nX = Dimsize(M_ROIMask,0)
 variable nY = Dimsize(M_ROIMask,1)
 make /o/n=(nX,nY) ROIs = 1 // empty ROI wave
 
-
 variable xx,yy,rr
-
-
-// calculate Pixel size in microns to scale ROIs
-wave wParamsNum // Reads data-header
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-setscale /p x,-nX/2*px_Size,px_Size,"µm" ROIs
-setscale /p y,-nY/2*px_Size,px_Size,"µm"  ROIs
 
 // create proper ROI Mask from M_ROIMask
 duplicate /o M_ROIMask ROIbw_sub // make a lookup wave
@@ -171,17 +149,6 @@ end
 
 function OS_monoPixelApply()
 
-// 1 // check for Parameter Table
-if (waveexists($"OS_Parameters")==0)
-	print "Warning: OS_Parameters wave not yet generated - doing that now..."
-	OS_ParameterTable()
-	DoUpdate
-endif
-wave OS_Parameters
-
-// flags from "OS_Parameters"
-variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065]
-
 // data handling
 wave M_ROIMask
 variable nX = Dimsize(M_ROIMask,0)
@@ -189,13 +156,6 @@ variable nY = Dimsize(M_ROIMask,1)
 make /o/n=(nX,nY) ROIs = 1 // empty ROI wave
 
 variable xx,yy,rr
-
-// calculate Pixel size in microns to scale ROIs
-wave wParamsNum // Reads data-header
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-setscale /p x,-nX/2*px_Size,px_Size,"µm" ROIs
-setscale /p y,-nY/2*px_Size,px_Size,"µm"  ROIs
 
 // make each pixel == 1 ROI
 variable nRois = 0
@@ -246,10 +206,7 @@ else
 	variable X_cut = OS_Parameters[%LightArtifact_cut]
 	variable LineDuration = OS_Parameters[%LineDuration]
 	variable Channel = OS_Parameters[%Data_Channel]
-	variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065]
 	
-	// data handling
-	wave wParamsNum // Reads data-header
 	string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 	duplicate /o $input_name InputData
 	variable nX = DimSize(InputData,0)
@@ -260,11 +217,6 @@ else
 	print "Recorded ", total_time, "s @", framerate, "Hz"
 	
 	variable xx,yy,rr
-	
-	// calculate Pixel / ROI sizes in microns
-	variable zoom = wParamsNum(30) // extract zoom
-	variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-	print "Pixel Size:", round(px_size*100)/100," microns"
 	
 	// make SD average
 	make /o/n=(nX,nY) Stack_SD = 0 // Avg projection of InputData
@@ -285,9 +237,6 @@ else
 	ROIs_corrected[nX-nX_ROIs,nX-1][]=ROIs[p-(nX-nX_ROIs)][q]
 	duplicate/o ROIs_corrected, ROIs
 	killwaves ROIs_corrected
-	
-	setscale /p x,-nX/2*px_Size,px_Size,"µm" Stack_SD,ROIs
-	setscale /p y,-nY/2*px_Size,px_Size,"µm" Stack_SD, ROIs
 	
 	// display SD wave
 	Display /k=1
@@ -311,11 +260,5 @@ else
 	killwaves currentwave,InputData
 
 endif
-
-end
-
-
-
-
 
 end

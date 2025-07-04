@@ -51,13 +51,11 @@ variable IgnoreLastXseconds = OS_Parameters[%IgnoreLastXseconds]
 variable SkipFirstTriggers = OS_Parameters[%Skip_First_Triggers] 
 variable SkipLastTriggers = OS_Parameters[%Skip_Last_Triggers] // KF 20160310
 variable TriggerMode = OS_Parameters[%Trigger_Mode]
-variable StimulatorDelay = OS_Parameters[%StimulatorDelay]
 variable LightArtifactCut = OS_Parameters[%LightArtifact_cut]
 variable nPlanes = OS_Parameters[%nPlanes]
 
 
 // data handling
-wave wParamsNum // Reads data-header
 string input_name1 = "wDataCh"+Num2Str(DataChannel)+"_detrended"
 string input_name2 = "wDataCh"+Num2Str(TriggerChannel)
 string output_name1 = "Traces"+Num2Str(DataChannel)+"_raw"
@@ -107,7 +105,7 @@ image_temp/=V_Max-V_Min
 image_temp[0,LightArtifactCut][]=0
 setscale x, 0, nX, ROIs_temp, image_temp // so that CoM reads out pixel not microns KF 20160310
 setscale y, 0, nY, ROIs_temp, image_temp
-CenterofMass_custom(image_temp,ROIs_temp)
+OS_CoM()
 killwaves ROIs_temp,image_temp
 
 wave CoM
@@ -200,29 +198,19 @@ for (rr=0;rr<nRois;rr+=1)
 		endfor
 	endfor
 	OutputTraces_raw[][rr]/=ROI_size // now is average activity of ROI
-	make /o/n=(nSeconds_prerun_reference/(nY*LineDuration)) BaselineTrace =OutputTraces_raw[p+Ignore1stXseconds/FrameDuration][rr]
+	variable nF_BaselineTrace = (nSeconds_prerun_reference/(nY*LineDuration))
+	if (nF_BaselineTrace<3) // need at least 3 points to compute an SD
+		nF_BaselineTrace=3
+	endif
+	if (nF_BaselineTrace>nF/2)
+		nF_BaselineTrace=nF/2
+	endif
+	make /o/n=(nF_BaselineTrace) BaselineTrace =OutputTraces_raw[p+Ignore1stXseconds/FrameDuration][rr]
 	Wavestats/Q BaselineTrace
 	OutputTraces_zscore[][rr]=(OutputTraces_raw[p][rr]-V_Avg)/V_SDev
-	OutputTraceTimes[][rr]=p*nY*LineDuration + CoM[rr][1]*LineDuration  + StimulatorDelay/1000 // correct each ROIs timestamp by it's Y position in the scan // use y values not x values KF 20160310 // and by stimulator delay!
+	OutputTraceTimes[][rr]=p*nY*LineDuration + CoM[rr][1]*LineDuration // correct each ROIs timestamp by it's Y position in the scan // use y values not x values KF 20160310 // and by stimulator delay!
 endfor
 
-//// Also extract the stimulus artifact in 2ms precision:
-//make /o/n=(nY*nF) StimArtifact = NaN
-//setscale /p x,0,LineDuration,"s" StimArtifact
-//for (ff=0;ff<nF;ff+=1)
-//	if (nPlanes == 1)
-//		for (yy=0;yy<nY;yy+=1)
-//			StimArtifact[ff*nY+yy]=RawInputData[0][yy][ff] // this will give an error if the data has multiple planes
-//		endfor
-//	else
-//		for (yy=0;yy<nY/nPlanes;yy+=1)
-//			StimArtifact[ff*nY+yy]=RawInputData[0][yy][ff] //  hack to avoid error message // will give gaps in the stim artifact - could be fixed by adding a plane loop here
-//		endfor
-//	endif
-//endfor
-//Wavestats/Q StimArtifact
-//StimArtifact-=V_Min
-//StimArtifact/=V_Max-V_Min
 
 // export handling
 duplicate /o OutputTraces_raw $output_name1
@@ -235,11 +223,6 @@ duplicate/ o OutputTriggerTimes_Frame $output_name6
 // Display
 if (Display_traces==1)
 	display /k=1
-	
-//	Appendtograph /l=StimY StimArtifact
-//	ModifyGraph noLabel(StimY)=2,axThick(StimY)=0,lblPos(StimY)=47;DelayUpdate
-//	ModifyGraph axisEnab(StimY)={0.05,0.15},freePos(StimY)={0,kwFraction}
-//	ModifyGraph rgb(StimArtifact)=(0,0,0)
 
 	// traces
 	make /o/n=(1) M_Colors
@@ -286,6 +269,34 @@ if (Display_traces==1)
 endif
 
 // cleanup
-killwaves InputData, InputTriggers, OutputTraces_raw,OutputTraces_zscore,OutputTraceTimes,OutputTriggerTimes,BaselineTrace,M_Colors, OutputTriggerValues, OutputTriggerTimes_Frame
+killwaves InputData, InputTriggers, OutputTraces_raw,OutputTraces_zscore,OutputTraceTimes,OutputTriggerTimes,BaselineTrace, OutputTriggerValues, OutputTriggerTimes_Frame
 // RawinputData
+end
+
+
+////////////////////////////////////////////////
+/////////////////////////////////////////////////
+/////////////////////////////////////////////////
+
+function OS_CoM()
+
+wave ROIs
+
+imagestats ROIs
+variable nROIs = -V_Min
+variable nX = Dimsize(ROIs,0)
+variable nY = Dimsize(ROIs,1)
+variable rr
+make /o/n=(nX,nY) TempROIs = NaN
+make /o/n=(nROIs,2) CoM = NaN
+for (rr=0;rr<nROIs;rr+=1)
+	TempROIs[][]=(ROIs[p][q]==-rr-1)?(1):(0)
+	Smooth /DIM=0 10, TempROIs
+	Smooth /DIM=1 10, TempROIs
+	ImageStats/Q TempROIs
+	CoM[rr][1]=V_MaxColLoc
+	CoM[rr][0]=V_MaxRowLoc
+endfor
+killwaves TempROIs
+
 end

@@ -45,11 +45,8 @@ variable nLines_Lumped = OS_Parameters[%nLines_lumped]
 variable Make_QCprojection = OS_Parameters[%QCProjection_make]
 variable TriggersPerStim = OS_Parameters[%QCProj_TriggersPerStim]
 variable QCProjection_binning = OS_Parameters[%QCProjection_binning]
-variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065] * (OS_Parameters[%fullFOVSize]/0.5)
 
 // data handling
-wave wParamsNum // Reads data-header
-wave wParamsNum // Reads data-header
 string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
 string traces_name = "Traces"+Num2Str(Channel)+"_raw"
 if (use_znorm==1)
@@ -77,13 +74,6 @@ string output_name4 = "SnippetsTimes"+Num2Str(Channel) // andre addition 2016 04
 
 variable tt,rr,ll,pp,xx,yy,ff
 variable bbx, bby // needed for QC projection binning
-
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-variable bbx, bby // needed for QC projection binning
-
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
 
 // Get Snippet Duration, nLoops etc..
 variable nTriggers
@@ -164,7 +154,7 @@ make /o/n=(nRois) MoV = NaN // (1 - variance of mean / mean of variance)
 make /o/n=(nRois) VoM = NaN // (1 - variance of mean / mean of variance)
 
 for (rr=0;rr<nRois;rr+=1)
-	make /o/n=(SnippetDuration) currentwave = OutputTraceAverages[p][rr]
+	make /o/n=(SnippetDuration * 1/(LineDuration*nLines_Lumped)) currentwave = OutputTraceAverages[p][rr]
 	Wavestats/Q currentwave
 	variable variance_of_mean = V_SDev^2
 	VoM[rr]=variance_of_mean
@@ -228,9 +218,8 @@ if (Make_QCprojection==1)
 
 	make /o/n=(nX-X_Cut,nY) QC_projection = NaN
 	make /o/n=(nX-X_Cut,nY,TriggerDivider) QC_projection_perTrigger = NaN
+	make /o/n=(nX-X_Cut,nY,3) QC_projection_RGB = NaN
 	
-	setscale /p x,-nX/2*px_Size,px_Size,"�m" QC_projection, QC_projection_perTrigger
-	setscale /p y,-nY/2*px_Size,px_Size,"�m"  QC_projection, QC_projection_perTrigger
 	
 	for (xx=0;xx<nX-X_Cut;xx+=QCProjection_binning)
 		for (yy=0;yy<nY;yy+=QCProjection_binning)
@@ -305,9 +294,33 @@ if (Make_QCprojection==1)
 		endfor
 	endfor
 	
-
-
+	// make the RGB version
+	variable CurrentR = 0
+	variable CurrentG = 0 
+	variable CurrentB = 0
+	variable QCProjection_RGBScaler = 1
+	if (CurrentR>Dimsize(QC_projection_perTrigger,2)-1) // to make sure this doesnt try to address QC slices that dont exist
+		CurrentR=Dimsize(QC_projection_perTrigger,2)-1
+		print "Changed R-Channel in QC-RGB to", CurrentR
+	endif
+	if (CurrentG>Dimsize(QC_projection_perTrigger,2)-1)
+		CurrentG=Dimsize(QC_projection_perTrigger,2)-1
+		print "Changed G-Channel in QC-RGB to", CurrentG
+	endif
+	if (CurrentB>Dimsize(QC_projection_perTrigger,2)-1)
+		CurrentB=Dimsize(QC_projection_perTrigger,2)-1
+		print "Changed B-Channel in QC-RGB to", CurrentB
+	endif
+	QC_projection_RGB[][][0]=QC_projection_perTrigger[p][q][CurrentR]*2^16 * QCProjection_RGBScaler
+	QC_projection_RGB[][][1]=QC_projection_perTrigger[p][q][CurrentG]*2^16 * QCProjection_RGBScaler
+	QC_projection_RGB[][][2]=QC_projection_perTrigger[p][q][CurrentB]*2^16 * QCProjection_RGBScaler
 endif
+QC_projection_RGB[][][]=(QC_projection_RGB[p][q][r]>=2^16-1)?(2^16-1):(QC_projection_RGB[p][q][r])
+
+//
+
+
+
 
 
 
@@ -396,15 +409,19 @@ endif
 
 if (Make_QCprojection==1)
 	Display /k=1
-	variable WinWidth = 800
-	variable WinHeight = (nY/nX) * WinWidth/3	
+	variable WinWidth = 600
+	variable WinHeight = (nY/nX) * WinWidth	
 	ModifyGraph width=WinWidth,height=WinHeight
 
 	
-	Appendimage /r=YY /b=QCIndX QC_projection_perTrigger
+	Appendimage /G=1 /r=YY1 /b=XX1 QC_projection_perTrigger
 
 	// Trigger box	
 	variable/G gCurrentTrigger = 0
+	variable/G gCurrentR = CurrentR
+	variable/G gCurrentG = CurrentG
+	variable/G gCurrentB = CurrentB
+	variable/G gQCProjection_RGBScaler = QCProjection_RGBScaler
 	
 	String iName= WMTopImageGraph()		// find one top image in the top graph window
 	Wave w= $WMGetImageWave(iName)	// get the wave associated with the top image.
@@ -413,28 +430,44 @@ if (Make_QCprojection==1)
 	GetWindow kwTopWin,gsize
 	String cmd
 	SetVariable TriggerVal,pos={V_left+20,V_top+20},size={80,14}
-	SetVariable TriggerVal,limits={0,TriggerDivider-1,1},title="Trig",proc=OS_ExecuteSliderVar_QC
+	SetVariable TriggerVal,limits={0,Triggermode-1,1},title="Trig",proc=OS_ExecuteSliderVar_QC
 	sprintf cmd,"SetVariable TriggerVal,value=%s",GetDataFolder(1)+"gCurrentTrigger"
 	Execute cmd
+	
+	SetVariable ChR,pos={V_left+20,V_top+50},size={80,14}
+	SetVariable ChR,limits={0,Triggermode-1,1},title="R_Ch",proc=OS_ExecuteSliderVar_QC
+	sprintf cmd,"SetVariable ChR,value=%s",GetDataFolder(1)+"gCurrentR"
+	Execute cmd
+	
+	SetVariable ChG,pos={V_left+20,V_top+70},size={80,14}
+	SetVariable ChG,limits={0,Triggermode-1,1},title="G_Ch",proc=OS_ExecuteSliderVar_QC
+	sprintf cmd,"SetVariable ChG,value=%s",GetDataFolder(1)+"gCurrentG"
+	Execute cmd
+	
+	SetVariable ChB,pos={V_left+20,V_top+90},size={80,14}
+	SetVariable ChB,limits={0,Triggermode-1,1},title="B_Ch",proc=OS_ExecuteSliderVar_QC
+	sprintf cmd,"SetVariable ChB,value=%s",GetDataFolder(1)+"gCurrentB"
+	Execute cmd
+	
+	SetVariable Scale,pos={V_left+20,V_top+120},size={80,14}
+	SetVariable Scale,limits={0,Triggermode-1,1},title="Mul",proc=OS_ExecuteSliderVar_QC
+	sprintf cmd,"SetVariable Scale,value=%s",GetDataFolder(1)+"gQCProjection_RGBScaler"
+	Execute cmd
+
 
 	//
-	setscale /p x,-nX/2*px_Size,px_Size,"�m" stack_SD
-	setscale /p y,-nY/2*px_Size,px_Size,"�m"  stack_SD
-	
-	Appendimage /r=YY /b=AverageX Stack_SD
-	Appendimage /r=YY /b=QCFullX QC_projection
+	Appendimage /r=YY2 /b=XX2 Stack_SD
+	Appendimage /r=YY1 /b=XX2 QC_projection
+	Appendimage /r=YY2 /b=XX1 QC_projection_RGB
 	
 	ModifyGraph fSize=8,freePos={0,kwFraction}
-	ModifyGraph axisEnab(YY)={0,1},axisEnab(QCIndX)={0.08,0.38},axisEnab(QCFullX)={0.39,0.69},axisEnab(AverageX)={0.7,1}
+	ModifyGraph axisEnab(YY1)={0.55,1},axisEnab(YY2)={0,0.45},axisEnab(XX1)={0.1,0.5},axisEnab(XX2)={0.6,1}
 
-	Label AverageX "\\Z10SD projection";DelayUpdate
-	Label QCFullX "\\Z10QC projection total";DelayUpdate
-	Label QCIndX "\\Z10QC projection by Stimulus";DelayUpdate
-	ModifyGraph lblPos(AverageX)=47,lblPos(QCFullX)=47,lblPos(QCIndX)=47
-	ModifyGraph lblPos=47
+	Label XX2 "\\Z10Full projection";DelayUpdate
+	Label XX1 "\\Z10QC projection by Stimulus";DelayUpdate
 	ModifyGraph lblPos=47
 	ModifyGraph noLabel=1,axThick=0
-	ModifyGraph noLabel(YY)=2
+	ModifyGraph noLabel(YY1)=2, noLabel(YY2)=2
 	
 	DoUpdate
 	ModifyGraph width=0,height=0
@@ -458,9 +491,23 @@ function OS_ExecuteSlider_QC(name, value, event)
 	Variable event		// bit field: bit 0: value set; 1: mouse down, //   2: mouse up, 3: mouse moved
 	
 	NVAR gCurrentTrigger
+	NVAR gCurrentR
+	NVAR gCurrentG
+	NVAR gCurrentB
+	NVAR gQCProjection_RGBScaler
+	
 
 	SVAR imageName2
 	ModifyImage  $imageName2 plane=(gCurrentTrigger)	
+	
+	wave QC_projection_RGB
+	wave QC_projection_perTrigger
+	
+	QC_projection_RGB[][][0]=QC_projection_perTrigger[p][q][gCurrentR]*2^16 * gQCProjection_RGBScaler
+	QC_projection_RGB[][][1]=QC_projection_perTrigger[p][q][gCurrentG]*2^16 * gQCProjection_RGBScaler
+	QC_projection_RGB[][][2]=QC_projection_perTrigger[p][q][gCurrentB]*2^16 * gQCProjection_RGBScaler
+	QC_projection_RGB[][][]=(QC_projection_RGB[p][q][r]>=2^16-1)?(2^16-1):(QC_projection_RGB[p][q][r])
+	
 	return 0				// other return values reserved
 end
 //*******************************************************************************************************

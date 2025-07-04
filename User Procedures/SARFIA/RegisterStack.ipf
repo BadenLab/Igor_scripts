@@ -2,6 +2,14 @@
 #pragma IgorVersion = 6.1
 
 //update 16/11/10: added flag /pstk to RegisterStack registration
+//update 04/05/15: added function CoRegisterStack
+//CoRegisterStack(StackList, [suffix]): Performs image registration
+//on a stack of images and applies the same registration parameters
+//to all subsequent stacks in a list. StackList is a text wave containing 
+//the names of all waves to be registered. The 1st wave in StackList is 
+//the template for all subsequent ones. The optional string suffix
+//will be appended to the name of all resultant waves (default: "_reg").
+
 
 Function RegisterStack(picwave, [target])
 
@@ -37,23 +45,14 @@ Function RegisterStack(picwave, [target])
 	
 	redimension /s regcalcwave		//redimension to single precision float, as ImageRegistration allows only that
 	
-	// duplicate /o regcalcwave, ref
-	// redimension /N=(-1,-1) ref
+	duplicate /o regcalcwave, ref
+	redimension /N=(-1,-1) ref
 	
-	imagetransform averageimage regcalcwave
-	wave M_aveimage
-	wave ave_image_stck = M_aveimage
 	
-	duplicate /o/R=[][][1,50] regcalcwave, ref1		// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
-	imagetransform averageimage ref1		// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
-	wave M_aveimage									// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
-	wave ref=M_aveimage					// modified by jamie 10/11/14 to take an averag of the 1st 50 frames
-	redimension/S /N=(-1,-1) ref
-	
-	imageregistration /q /stck /pstk /csnr=0 /refm=0 /tstm=0 testwave=regcalcwave, refwave=ref1
+	imageregistration /q /stck /pstk /csnr=0 /refm=0 /tstm=0 testwave=regcalcwave, refwave=ref
 	wave m_regout
-	wavestats ref1
-	MatrixOP/o/free w_NaNBusted = ReplaceNaNs(m_regout, V_avg)	//replace NaN's with 0
+	
+	MatrixOP/o/free w_NaNBusted = ReplaceNaNs(m_regout, 0)	//replace NaN's with 0
 
 	copyscaling(regcalcwave, w_NaNBusted)
 	duplicate /o w_NaNBusted, $target
@@ -91,3 +90,95 @@ Reg2($topwave)
 killwaves /z w_wavelist
 end
 
+////////////////////////////////////////////////
+
+Function CoRegisterStack(StackList, [suffix])
+	Wave/t StackList				//Contains names of waves to be registered. 1st is reference for all subsequent ones.
+	String suffix
+	
+	Variable nStacks, xRef, yRef, zRef, xTest, yTest, zTest, ii
+	Variable CheckVal
+	String wName, resultName, RPName
+	
+		
+	if(ParamIsDefault(suffix))
+		suffix="_reg"
+	endif
+	
+	nStacks=DimSize(StackList,0)
+	
+	For(ii=0;ii<nStacks;ii+=1)
+	
+		wName=StackList[ii]
+		resultName=wName+suffix
+		RPName=wName+"_RegParams"
+		
+	//checking if specified wave exists and is valid
+		if(strlen(wName)<1 && ii==0)
+			Print "No reference wave specified. Aborting."
+			Return -1
+		elseif (strlen(wName)<1) 
+			Printf "No wave specified at position %g. Skipping.\r", ii
+			Continue
+		endif
+	
+		Wave/z regWave = $wName
+		If (WaveExists(regWave) == 0 && ii==0)
+			Printf "Reference wave %s not found. Aborting.\r", wName
+			Return -1
+		Elseif((WaveExists(regWave) == 0))
+			Printf "Wave %s not found. Skipping.\r", wName
+			Continue
+		Endif
+		
+	//check if wave dimensions match
+		if(ii==0)
+			xRef=DimSize(regWave, 0)
+			yRef=DimSize(regWave, 1)
+			zRef=DimSize(regWave, 2)
+			
+		else
+			xTest=DimSize(regWave, 0)
+			yTest=DimSize(regWave, 1)
+			zTest=DimSize(regWave, 2)
+			
+			CheckVal=ABS(xRef-xTest)+ABS(yRef-yTest)+ABS(zRef-zTest)
+			if(CheckVal>0)
+				Printf "Dimension mismatch of wave %s. Skipping.\r", wName
+			endif		
+		endif
+		
+	//register
+		if(ii==00)
+			
+			Duplicate/o/free/r=[][] regWave, refMask		//generate refMask from 1st layer of reference image
+			Redimension/n=(-1,-1) refMask				//make refMask 2D
+	
+			ImageRegistration /q /stck /pstk /csnr=0 /refm=0 /tstm=0 testwave=regwave, refwave=refMask
+			wave M_regout, M_RegParams
+	
+			MatrixOP/o/free w_NaNBusted = ReplaceNaNs(M_regout, 0)	//replace NaN's with 0
+
+
+			copyscales regWave, w_NaNBusted
+			duplicate/o M_RegParams, $RPName		//make copy of M_RegParams
+			duplicate /o w_NaNBusted, $resultName	//make copy of result
+			wave RegParams = $RPName
+	
+		else
+			ImageRegistration /q /stck /pstk /csnr=0 /refm=0 /tstm=0 /user=RegParams testwave=regwave
+			wave M_regout
+			
+			MatrixOP/o/free w_NaNBusted = ReplaceNaNs(M_regout, 0)	//replace NaN's with 0
+
+
+			copyscales regWave, w_NaNBusted
+			duplicate /o w_NaNBusted, $resultName	//make copy of result
+		endif
+	
+	EndFor
+	
+	
+	Killwaves /z  M_Regout, M_Regmaskout, M_RegParams, W_RegParams  
+	return 1
+End

@@ -78,7 +78,11 @@ variable pp,rr,cc
 // Clustering
 make /o/n=1 M_KMClasses
 make /o/n=(nROIs) W_KMMembers
+if (nClasses_seed>nROIs-1)
+	nClasses_seed = nROIs-1
+endif
 Kmeans /NCLS=(nClasses_seed) /OUT=2 InputData
+
 // now M_KMClasses has the cluster means (classes) and W_KMMembers has each ROI's class assignment
 variable nClasses = Dimsize(M_KMClasses,1)
 setscale /p x,0,(LineDuration*nLines_Lumped),"s" M_KMClasses
@@ -100,6 +104,8 @@ if (Display_averages==1)
 
 	// RoiMap plotting
 	
+	print nROIs
+	
 	display /k=1 
 	variable nX = Dimsize(Stack_Ave,0)
 	variable nY = Dimsize(Stack_Ave,1)
@@ -112,7 +118,7 @@ if (Display_averages==1)
 	variable colorposition
 	for (rr=0;rr<nRois;rr+=1)
 		colorposition = 255 * (W_KMMembers[rr]+1)/nClasses
-		ModifyImage ROIs explicit=1,eval={-rr,M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2]}
+		ModifyImage ROIs explicit=1,eval={-rr-1,M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2]}
 	endfor
 	
 	// Trace plotting
@@ -190,7 +196,7 @@ endif
 
 
 // cleanup
-killwaves InputData, M_KMClasses, W_KMMembers
+//killwaves InputData, M_KMClasses, W_KMMembers
 
 
 end

@@ -55,13 +55,16 @@ endfor
 // CellLab only accepts square scans. So if scan is not square, here extend the Image it works with to be square
 if (nX==nY)
 	string sourcename = "Stack_ave"
-
-else
-	make /o/n=(nX,nX) Stack_Ave_square = InputData[nX/2][nY/2][nF/2]
-	Stack_Ave_square[][0,nX-nY]=Stack_Ave[p][q]
-	//Setscale 
+elseif(nX>nY)
+	ImageStats/Q Stack_Ave
+	make /o/n=(nX,nX) Stack_Ave_square = V_Avg//InputData[nX/2][nY/2][nF/2] // fills the background with some relevant brightness
+	Stack_Ave_square[][0,nX-nY-1]=Stack_Ave[p][q]
 	sourcename = "Stack_ave_square"
-	
+elseif(nY>nX)
+	ImageStats/Q Stack_Ave
+	make /o/n=(nY,nY) Stack_Ave_square = V_Avg//InputData[nX/2][nY/2][nF/2] // fills the background with some relevant brightness
+	Stack_Ave_square[0,nY-nX-1][]=Stack_Ave[p][q]
+	sourcename = "Stack_ave_square"	
 endif
 	string targetname = "ROIs"
 

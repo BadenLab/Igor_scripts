@@ -15,7 +15,6 @@ variable nSeconds_smooth = OS_Parameters[%Detrend_smooth_window]
 variable X_cut = OS_Parameters[%LightArtifact_cut]
 variable LineDuration = OS_Parameters[%LineDuration]
 variable Display_LineImage = OS_Parameters[%Display_Stuff]
-variable FOV_at_zoom065 = OS_Parameters[%FOV_at_zoom065]
 
 printf "Converting wDataCh"
 printf Num2Str(Channel)
@@ -38,16 +37,10 @@ if (nY>1)
 	print "The original wDataCh waves are saved as RawData_original & RawTriggers_original"
 endif
 
-// calculate Pixel size in microns to scale ROIs
-wave wParamsNum // Reads data-header
-variable zoom = wParamsNum(30) // extract zoom
-variable px_Size = (0.65/zoom * FOV_at_zoom065)/nX // microns
-
 // make stack with single line in Y
 make /o/n=(nX,1,nY*nF) OutputData = NaN
 make /o/n=(nX,1,nY*nF) OutputTriggers = NaN
 make /o/n=(nY*nF,nX-X_cut) LineScanImage = NaN
-setscale /p y,-nX/2*px_Size,px_Size,"µm" LineScanImage
 Setscale /p x,0,LineDuration,"s" LineScanImage
 
 
