@@ -106,6 +106,9 @@ endif
 // 5 //  check if NoiseArray3D is there
 	
 
+// 5 //  check if NoiseArray3D is there
+	
+
 
 // flags from "OS_Parameters"
 variable Display_Stuff = OS_Parameters[%Display_Stuff]
@@ -183,14 +186,23 @@ variable nY = DimSize(InputStack,1)
 variable Frameduration = nY * LineDuration 
 variable nF_Filter = floor(FilterLength / Frameduration) // new strategy - make the noise array match framerate
 
+variable Frameduration = nY * LineDuration 
+variable nF_Filter = floor(FilterLength / Frameduration) // new strategy - make the noise array match framerate
+
 wave NoiseArray3D
 variable nX_Noise = Dimsize(NoiseArray3D,1) // X and Y flipped relative to mouse
 variable nY_Noise = Dimsize(NoiseArray3D,0)
 variable nZ_Noise = Dimsize(NoiseArray3D,2)
+variable nZ_Noise = Dimsize(NoiseArray3D,2)
 
 string output_name_SD = "STRF_SD"+Num2Str(Channel) // 3D wave (x/y/Roi)
 string output_name_Corr = "STRF_Corr"+Num2Str(Channel) // 3D wave (x/y/Roi)
+string output_name_Corr = "STRF_Corr"+Num2Str(Channel) // 3D wave (x/y/Roi)
 string output_name_individual = "STRF"+Num2Str(Channel)+"_" 
+
+make /o/n=(nX_Noise,nY_Noise*nColours,nRois) Filter_SDs = 0
+make /o/n=(nX_Noise,nY_Noise*nColours,nRois) Filter_Pols = 1 // force to 1 (On)
+make /o/n=(nX_Noise,nY_Noise*nColours,nROIs) Filter_Corrs = 0
 
 make /o/n=(nX_Noise,nY_Noise*nColours,nRois) Filter_SDs = 0
 make /o/n=(nX_Noise,nY_Noise*nColours,nRois) Filter_Pols = 1 // force to 1 (On)
@@ -234,9 +246,22 @@ for (ll=0;ll<nColourLoops;ll+=1)
 	endfor
 endfor
 
+// generate a frameprecision lookup of each colour
+variable nColourLoops = ceil(nTriggers / (nColours*nTriggers_per_Colour))
+make /o/n=(nF) ColourLookup = NaN
+variable colour
+for (ll=0;ll<nColourLoops;ll+=1)
+	for (colour=0;colour<nColours;colour+=1)
+		currentstartframe = triggertimes_frame[ll*(nColours*nTriggers_per_Colour)+colour*nTriggers_per_Colour]
+		currentendframe = triggertimes_frame[ll*(nColours*nTriggers_per_Colour)+(colour+1)*nTriggers_per_Colour-1]
+		ColourLookup[currentstartframe,currentendframe]=colour
+	endfor
+endfor
+
 // Get Filters
 printf "Calculating kernels for "
 printf Num2Str(nRois)
+print " ROIs... "
 print " ROIs... "
 make /o/n=(1) W_Statslinearcorrelationtest
 
@@ -250,6 +275,33 @@ make /o/n=(nROIs) eventcounter = 0
 
 make /o/n=(nX_Noise, nY_Noise, nColours) MeanStim = NaN
 
+/////////////////////////////////
+
+variable nF_relevant = triggertimes_frame[nTriggers-1]-triggertimes_frame[0] 
+make /o/n=(nX_Noise,nY_Noise*nColours,nF_Filter*nROIs) STRFs_concatenated = NaN
+
+make /o/n=(nF_relevant) CurrentPx = NAN
+make /o/n=(nROIs) eventcounter = 0
+
+make /o/n=(nX_Noise, nY_Noise, nColours) MeanStim = NaN
+
+for (rr=-1;rr<nRois;rr+=1) // goes through all ROIs
+	
+	if (rr==-1) // rr == -1 is the reference filter computed as random
+		eventcounter = 1000 // meaningless
+	else
+	// have a fun little count of "events"
+		make /o/n=(nF_relevant) CurrentTrace = InputTraces[triggertimes_frame[0]+p][rr] 
+		Differentiate  CurrentTrace/D=CurrentTrace_DIF
+		make /o/n=(100) CurrentTrace_DIFBase = CurrentTrace_DIF[p]
+		WaveStats/Q CurrentTrace_DIFBase
+		CurrentTrace_DIF-=V_Avg
+		CurrentTrace_DIF/=V_SDev	
+		for (ff=0;ff<nF_relevant;ff+=1)
+			if (CurrentTrace_DIF[ff]>Event_SD)
+				eventcounter[rr]+=1
+			endif
+		endfor
 for (rr=-1;rr<nRois;rr+=1) // goes through all ROIs
 	
 	if (rr==-1) // rr == -1 is the reference filter computed as random
@@ -402,13 +454,155 @@ endif
 	STRFs_concatenated_SMth[][][]/=V_SDev
 	
 	make /o/n=(nX_Noise,nY_Noise*nColours) ConcatenatedFilter_SD = NaN
+	
+	//print eventcounter[rr], "events detected in ROI", rr
+	//
+
+	printf "ROI#"+Num2Str(rr)+"/"+Num2Str(nROIs)+": Colours..."
+	make /o/n=(nF_relevant) CurrentLookup = ColourLookup[triggertimes_frame[0]+p]
+	
+	for (colour=0;colour<nColours;colour+=1)
+		if (rr==-1)
+			make /o/	n=(nF_relevant) CurrentTrace = 1
+			Multithread CurrentTrace[] = (CurrentLookup[p]==colour)?(CurrentTrace[p]):(0)
+		else
+			make /o/	n=(nF_relevant) CurrentTrace = InputTraces[triggertimes_frame[0]+p][rr] 
+			Multithread CurrentTrace[] = (CurrentLookup[p]==colour)?(CurrentTrace[p]):(0)
+		endif
+		
+		make /o/n=(nX_Noise, nY_Noise, nF_Filter) CurrentFilter = 0
+		setscale/p z,-FilterLength,0,"s" CurrentFilter
+		printf Num2Str(colour)
+		doupdate
+		// 
+		
+		if (rr==-1) // compute meanimage
+			for (xx=CropNoiseEdges;xx<nX_Noise-CropNoiseEdges;xx+=1)
+				for (yy=CropNoiseEdges;yy<nY_Noise-CropNoiseEdges;yy+=1)
+					make /o/n=(nF_relevant) CurrentPX = NoiseStimulus_Frameprecision[xx-CropNoiseEdges][yy-CropNoiseEdges][triggertimes_frame[0]+p] * CurrentTrace[p]
+					Wavestats/Q CurrentPX
+					MeanStim[xx][yy][colour]=V_Avg
+				endfor
+			endfor
+		else	 // compute filter
+			for (xx=CropNoiseEdges;xx<nX_Noise-CropNoiseEdges;xx+=1)
+				for (yy=CropNoiseEdges;yy<nY_Noise-CropNoiseEdges;yy+=1)
+					make /o/n=(nF_relevant) CurrentPX = NoiseStimulus_Frameprecision[xx-CropNoiseEdges][yy-CropNoiseEdges][triggertimes_frame[0]+p]
+					Correlate/NODC CurrentTrace, CurrentPX
+					Multithread CurrentFilter[xx][yy][]=CurrentPX[r+nF_relevant-nF_Filter]
+				endfor
+			endfor
+			CurrentFilter[][][]/=MeanStim[p][q][colour]
+			CurrentFilter[][][]=(NumType(CurrentFilter[p][q][r])==2)?(0):(CurrentFilter[p][q][r]) // kill NANs
+			STRFs_concatenated[][nY_Noise*colour,nY_Noise*(colour+1)-1][nF_Filter*rr,nF_Filter*(rr+1)-1]=Currentfilter[p][q-nY_Noise*colour][r-nF_Filter*rr]
+			// calculate each filter's correlation map 
+			for (xx=CropNoiseEdges;xx<nX_Noise-CropNoiseEdges;xx+=1)
+				for (yy=CropNoiseEdges;yy<nY_Noise-CropNoiseEdges;yy+=1)
+					make /o/n=(nF_Filter) centerpixel = CurrentFilter[xx][yy][p]
+					make /o/n=(nF_Filter) px1 = CurrentFilter[xx][yy-1][p]			
+					make /o/n=(nF_Filter) px2 = CurrentFilter[xx][yy+1][p]			
+					make /o/n=(nF_Filter) px3 = CurrentFilter[xx-1][yy][p]									
+					make /o/n=(nF_Filter) px4 = CurrentFilter[xx+1][yy][p]	
+					make /o/n=(nF_Filter) px5 = CurrentFilter[xx-1][yy-1][p]			
+					make /o/n=(nF_Filter) px6 = CurrentFilter[xx+1][yy-1][p]			
+					make /o/n=(nF_Filter) px7 = CurrentFilter[xx-1][yy+1][p]									
+					make /o/n=(nF_Filter) px8 = CurrentFilter[xx+1][yy+1][p]					
+					Correlate/NODC centerpixel, px1
+					Correlate/NODC centerpixel, px2
+					Correlate/NODC centerpixel, px3
+					Correlate/NODC centerpixel, px4
+					Correlate/NODC centerpixel, px5
+					Correlate/NODC centerpixel, px6
+					Correlate/NODC centerpixel, px7
+					Correlate/NODC centerpixel, px8
+					make /o/n=(nF_Filter*2-1) MeanNeighbourPixelCorr = (abs(px1[p])+abs(px2[p])+abs(px3[p])+abs(px4[p])+abs(px5[p])+abs(px6[p])+abs(px7[p])+abs(px8[p]))/8
+					Wavestats/Q MeanNeighbourPixelCorr
+					Filter_Corrs[xx][yy+colour*nY_Noise][rr]=V_Max
+				endfor
+			endfor		
+	
+			// calculating SD projections
+				// smooth
+			duplicate /o CurrentFilter CurrentFilter_Smth
+			if (preSDProjectSmooth>0)
+				Smooth /Dim=0 preSDProjectSmooth, CurrentFilter_Smth
+				Smooth /Dim=1 preSDProjectSmooth, CurrentFilter_Smth
+			endif
+				// z-normalise based on 1st frame
+			make /o/n=(nX_Noise,nY_Noise) tempwave = CurrentFilter_Smth[p][q][0]
+			ImageStats/Q tempwave
+			CurrentFilter_Smth[][][]-=V_Avg
+			CurrentFilter_Smth[][][]/=V_SDev
+				// compute SD as well as polarity mask
+			for (xx=0;xx<nX_Noise;xx+=1)
+				for (yy=0;yy<nY_Noise;yy+=1)
+					make /o/n=(nF_Filter) CurrentTrace = CurrentFilter_Smth[xx][yy][p]
+					wavestats/Q CurrentTrace 
+					If (V_maxloc<V_minloc) // default is On, so here force to Off 
+						Filter_Pols[xx][yy+colour*nY_Noise][rr]=-1
+					endif
+					Filter_SDs[xx][yy+colour*nY_Noise][rr]=V_SDev
+				endfor
+			endfor
+			
+			string filter_name = output_name_individual+Num2Str(rr)+"_"+Num2Str(colour) // creates a name for the filter of each ROI
+			duplicate /o CurrentFilter $filter_name 
+			
+			variable nX_NoiseCrop = nX_Noise-CropNoiseEdges*2
+			variable nY_NoiseCrop = nY_Noise-CropNoiseEdges*2
+		endif		
+		//
+		
+	endfor // colourloop end
+	print "."
+
+endfor
+
+// adjust the corr maps
+for (rr=0;rr<nROIs;rr+=1)
+	make /o/n=(nX_NoiseCrop,nY_NoiseCrop+nColours*colour) currentCorr = Filter_Corrs[p+CropNoiseEdges][q+CropNoiseEdges][rr]
+	Redimension /n=(nX_NoiseCrop*nY_noiseCrop) currentCorr	
+	Filter_Corrs[][][rr]/=StatsMedian(currentCorr)
+endfor
+
+//
+
+
+if (adjust_by_pols==1)
+	Filter_Corrs[][][]*=Filter_Pols[p][q][r]
+	Filter_SDs[][][]*=Filter_Pols[p][q][r]
+endif
+
+
+	// compute SD of concatenated filter
+	duplicate /o STRFs_concatenated STRFs_concatenated_SMth
+	if (preSDProjectSmooth>0)
+		Smooth /Dim=0 preSDProjectSmooth, STRFs_concatenated_SMth
+		Smooth /Dim=1 preSDProjectSmooth, STRFs_concatenated_SMth
+	endif
+	// z-normalise based on 1st frame
+	make /o/n=(nX_Noise,nY_Noise) tempwave = STRFs_concatenated_SMth[p][q][0]
+	ImageStats/Q tempwave
+	STRFs_concatenated_SMth[][][]-=V_Avg
+	STRFs_concatenated_SMth[][][]/=V_SDev
+	
+	make /o/n=(nX_Noise,nY_Noise*nColours) ConcatenatedFilter_SD = NaN
 	for (xx=0;xx<nX_Noise;xx+=1)
+		for (yy=0;yy<nY_Noise*nColours;yy+=1)
+			make /o/n=(nF_Filter*nROIs) CurrentTrace = STRFs_concatenated_SMth[xx][yy][p]
 		for (yy=0;yy<nY_Noise*nColours;yy+=1)
 			make /o/n=(nF_Filter*nROIs) CurrentTrace = STRFs_concatenated_SMth[xx][yy][p]
 			wavestats/Q CurrentTrace 
 			ConcatenatedFilter_SD[xx][yy]=V_SDev
+			ConcatenatedFilter_SD[xx][yy]=V_SDev
 		endfor
 	endfor
+
+
+
+// Make Corr projection Montage for Display
+variable nROIsMax_Display_per_row = 20
+variable nRows = Ceil((nROIs)/nROIsMax_Display_per_row) // +1 as last one is the concatenated one
 
 
 
@@ -420,9 +614,26 @@ if (nRows==1)
 	nColumns = nROIs
 endif
 make /o/n=(nColumns*nX_Noise,nRows*nY_Noise*nColours) STRF_Corr_Montage = NaN
+make /o/n=(nColumns*nX_Noise,nRows*nY_Noise*nColours) STRF_Corr_Montage = NaN
 variable currentXCoordinate = 0
 variable currentYCoordinate = 0
 for (rr=0;rr<nRois;rr+=1) // goes through all ROIs
+	STRF_Corr_Montage[currentXCoordinate*nX_Noise,(currentXCoordinate+1)*nX_Noise-1][currentYCoordinate*nY_Noise*nColours,(currentYCoordinate+1)*nY_Noise*nColours-1]=Filter_Corrs[p-currentXCoordinate*nX_Noise][q-currentYCoordinate*nY_Noise*nColours][rr]
+	currentXCoordinate+=1
+	if (currentXCoordinate>nColumns-1)
+		currentXCoordinate=0
+		currentYCoordinate+=1
+	endif
+endfor
+
+// make RGB version of the montage
+make /o/n=(nColumns*nX_Noise,nRows*nY_Noise,3) STRF_Corr_Montage_RGB = NaN
+currentXCoordinate = 0
+currentYCoordinate = 0
+for (rr=0;rr<nRois;rr+=1) // goes through all ROIs
+	STRF_Corr_Montage_RGB[currentXCoordinate*nX_Noise,(currentXCoordinate+1)*nX_Noise-1][currentYCoordinate*nY_Noise,(currentYCoordinate+1)*nY_Noise-1][0]=Filter_Corrs[p-currentXCoordinate*nX_Noise][q-currentYCoordinate*nY_Noise][rr] // Red is Red (0)
+	STRF_Corr_Montage_RGB[currentXCoordinate*nX_Noise,(currentXCoordinate+1)*nX_Noise-1][currentYCoordinate*nY_Noise,(currentYCoordinate+1)*nY_Noise-1][1]=Filter_Corrs[p-currentXCoordinate*nX_Noise][q-currentYCoordinate*nY_Noise+nY_Noise*1][rr] // Green is Green (1)
+	STRF_Corr_Montage_RGB[currentXCoordinate*nX_Noise,(currentXCoordinate+1)*nX_Noise-1][currentYCoordinate*nY_Noise,(currentYCoordinate+1)*nY_Noise-1][2]=Filter_Corrs[p-currentXCoordinate*nX_Noise][q-currentYCoordinate*nY_Noise+nY_Noise*3][rr] // Blue is UV (3)
 	STRF_Corr_Montage[currentXCoordinate*nX_Noise,(currentXCoordinate+1)*nX_Noise-1][currentYCoordinate*nY_Noise*nColours,(currentYCoordinate+1)*nY_Noise*nColours-1]=Filter_Corrs[p-currentXCoordinate*nX_Noise][q-currentYCoordinate*nY_Noise*nColours][rr]
 	currentXCoordinate+=1
 	if (currentXCoordinate>nColumns-1)
@@ -462,31 +673,71 @@ STRF_Corr_Montage_RGB2[][][]=(STRF_Corr_Montage_RGB2[p][q][r]>2^16-1)?(2^16-1):(
 
 
 
+duplicate/o STRF_Corr_Montage_RGB STRF_Corr_Montage_RGB2
+STRF_Corr_Montage_RGB2[][][]=abs(STRF_Corr_Montage_RGB[p][q][r])
+
+STRF_Corr_Montage_RGB[][][]/=RGB_Attenuation
+STRF_Corr_Montage_RGB+=1
+STRF_Corr_Montage_RGB*=2^15-1
+STRF_Corr_Montage_RGB[][][]=(STRF_Corr_Montage_RGB[p][q][r]<0)?(0):(STRF_Corr_Montage_RGB[p][q][r])
+STRF_Corr_Montage_RGB[][][]=(STRF_Corr_Montage_RGB[p][q][r]>2^16-1)?(2^16-1):(STRF_Corr_Montage_RGB[p][q][r])
+
+STRF_Corr_Montage_RGB2[][][]/=RGB_Attenuation
+STRF_Corr_Montage_RGB2*=2^15-1
+STRF_Corr_Montage_RGB2[][][]=(STRF_Corr_Montage_RGB2[p][q][r]<0)?(0):(STRF_Corr_Montage_RGB2[p][q][r])
+STRF_Corr_Montage_RGB2[][][]=(STRF_Corr_Montage_RGB2[p][q][r]>2^16-1)?(2^16-1):(STRF_Corr_Montage_RGB2[p][q][r])
+
+
+
 print " done."	
+
+////////////////////////////////////////////////////
+
+
 
 ////////////////////////////////////////////////////
 
 
 // export handling
 duplicate /o Filter_Corrs $output_name_Corr
+duplicate /o Filter_Corrs $output_name_Corr
 duplicate /o Filter_SDs $output_name_SD
 
 // display
+string tracename
 string tracename
 
 if (Display_Stuff==1)
 		
 	// display the Corr montage
 	display /k=1
+		
+	// display the Corr montage
+	display /k=1
 	make /o/n=(1) M_Colors
 	Colortab2Wave Rainbow256
 	Appendimage STRF_Corr_Montage
+	Appendimage STRF_Corr_Montage
 	ModifyGraph fSize=8,noLabel=2,axThick=0
+	ModifyImage STRF_Corr_Montage ctab= {-10,10,RedWhiteBlue,0} // 10 means 10 times the median
 	ModifyImage STRF_Corr_Montage ctab= {-10,10,RedWhiteBlue,0} // 10 means 10 times the median
 	
 endif	
 
 // cleanup
+killwaves CurrentFilter, Filter_SDs, InputStack,InputTraces,InputTraceTimes
+killwaves W_Statslinearcorrelationtest
+killwaves CurrentFilter_Smth, tempwave,STRFs_concatenated_SMth
+killwaves NoiseStimulus_Frameprecision
+killwaves MeanNeighbourPixelCorr,px1,px2,px3,px4,px5,px6,px7,px8
+killwaves ColourLookup, CurrentTrace
+
+end
+
+
+
+
+
 killwaves CurrentFilter, Filter_SDs, InputStack,InputTraces,InputTraceTimes
 killwaves W_Statslinearcorrelationtest
 killwaves CurrentFilter_Smth, tempwave,STRFs_concatenated_SMth
