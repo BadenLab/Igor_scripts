@@ -1,6 +1,8 @@
 # Igor_scripts
 Repository for the standard Baden lab OS scripts. Contents are current as of: 26.06.2025
 
+Based on but since diverged from https://github.com/eulerlab/ret_preproc/tree/master/dataProcessing/Igor. 
+
 # Installation
 Simply drag and drop the User Procedures and Igor Procedures into the Igor Pro 9 User Files, which by default can be found under `C:\Users\user\Documents\WaveMetrics\Igor Pro 9 User Files\`. 
 
