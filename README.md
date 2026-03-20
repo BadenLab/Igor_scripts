@@ -1,5 +1,7 @@
 # Igor_scripts
-Repository for the standard Baden lab OS scripts. Contents are current as of: 26.06.2025
+Repository for the standard Baden lab OS scripts. 
+
+*Note: Contents are current as of: 20.03.2026 including Xinwei's Autocorr ROI bugfix from January 22nd and Tom's updated AveragingSuite + RGB scripts from July 2025.*
 
 Based on but since diverged from https://github.com/eulerlab/ret_preproc/tree/master/dataProcessing/Igor. 
 
