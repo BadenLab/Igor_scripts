@@ -22,16 +22,22 @@
 
 function OS_Bars()
 
-variable Script_version = 2 // 1 is "original for bars", 2 is "Chiara's version"
+variable Script_version = 3 // 1 is "original for bars", 2 is "Chiara's version", 3 is Simens
 variable VectorSum_Threshold =0.3
 variable RadialHist_Range = 0.2
 variable nAngleBins = 16
+
+variable Display_individuals = 1
+
+variable BaseDuration = 10 // frames
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 variable Response_start_F= 25 
 variable Response_End_F =55
 variable X_squish = 100
 variable y_squish = 10
+variable evaluation_method = 1 
 make /o/n=8 Conditions = {0,4,1,5,2,6,3,7}
 if (Script_version==1)
 	Response_start_F= 25 // positions for readout in the actual response trace, in frames
@@ -39,12 +45,21 @@ if (Script_version==1)
 	X_squish = 100 // for trace visualisation
 	y_squish = 10
 	make /o/n=8 Conditions = {0,4,1,5,2,6,3,7} // Starting "Down", going  anticlockwise
+	evaluation_method = 1 // maxima
 elseif (Script_version==2) // Chiara's Version
-	Response_start_F= 9//25 // positions for readout in the actual response trace, in frames
-	Response_End_F =16//55
-	X_squish = 40// 100 // for trace visualisation
-	y_squish = 0.5//10
+	Response_start_F= 0//25 // positions for readout in the actual response trace, in frames
+	Response_End_F =50//55
+	X_squish = 20// 100 // for trace visualisation
+	y_squish =0.2//10
 	make /o/n=8 Conditions = {2,6,3,7,4,0,5,1} //{0,4,1,5,2,6,3,7} // Starting "Down", going  anticlockwise
+	evaluation_method = 1 // maxima
+elseif (Script_version==3) // Simen's Version
+	Response_start_F= 0//0 // positions for readout in the actual response trace, in frames
+	Response_End_F =89//89
+	X_squish = 100// 100 // for trace visualisation
+	y_squish =7//10
+	make /o/n=8 Conditions = {2,6,3,7,4,0,5,1} //{0,4,1,5,2,6,3,7} // Starting "Down", going  anticlockwise
+	evaluation_method = 1 // PCA custom
 endif
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -118,7 +133,7 @@ variable nTrials= floor(nTriggers/ nConditions)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-variable rr,cc,tt,ii
+variable rr,cc,tt,ii,ff
 
 make/o/n=(nTriggers) SnippetDurations = Triggertimes_Frame[p+1]-Triggertimes_Frame[p]
 wavestats/q SnippetDurations
@@ -141,34 +156,110 @@ endfor
 killwaves CurrentWave
 
 
-////Get maxima of snippets/////
+////Get response-parameters of snippets/////
 make/o/n=(nConditions,nROIs) Bar_Responses = nan
 make/o/n=(nConditions+1,nROIs) Bar_Responses_sorted = nan
 make/o/n=(nConditions+1,2,nROIs) Bar_Responses_sorted_vector = nan
 make/o/n=(nRois) Bar_VectorSum = nan
-
+make /o/n=(SnippetDuration, nConditions, nROIs) TimeAlignedAverages = 0
+make /o/n=(SnippetDuration, nROIs) TimeAlignedAverages_Average = 0
+make /o/n=(SnippetDuration, nConditions*nTrials,nROIs) TimeAlignedSnippets = 0
 
 for (rr=0;rr<nROIs;rr+=1)
-	make/o/n=(nConditions) Maximum_Response = 0
-	make/o/n=(nConditions) Maximum_Response_sorted = 0	
+	// Sum responses
+	make/o/n=(nConditions) Mean_Response = 0
+	make/o/n=(nConditions) Mean_Response_sorted = 0	
 	for(cc=0;cc<nConditions;cc+=1)
-		make/o/n=(SnippetDuration) CurrentWave = Bar_Averages[p][cc][rr]
-		Maximum_Response[cc]= WaveMax(CurrentWave,Response_start_F,Response_End_F)
-		Maximum_Response_sorted[Conditions[cc]]= WaveMax(CurrentWave,Response_start_F,Response_End_F)
+		make /o/n=(BaseDuration) tempBase = Bar_Averages[p][cc][rr]
+		WaveStats/Q tempBase
+		make/o/n=(SnippetDuration) CurrentWave = Bar_Averages[p][cc][rr] - V_Avg
+		
+		//Differentiate/DIM=0 CurrentWave/D=CurrentWave_DIF;DelayUpdate
+		
+		//WaveStats/Q CurrentWave
+		//Mean_Response[cc]= V_SDev
+		//Mean_Response_sorted[Conditions[cc]]= V_SDev
+	
+		Mean_Response[cc]= MEAN(CurrentWave,Response_start_F,Response_End_F)
+		Mean_Response_sorted[Conditions[cc]]= MEAN(CurrentWave,Response_start_F,Response_End_F)
 	endfor
 
-	Maximum_Response[]=(Maximum_Response[p]<0)?(0):(Maximum_Response[p]) // eliminate negatives
-	Maximum_Response_sorted[]=(Maximum_Response_sorted[p]<0)?(0):(Maximum_Response_sorted[p])
-	Wavestats/Q Maximum_Response 
+	Mean_Response[]=(Mean_Response[p]<0)?(0):(Mean_Response[p]) // eliminate negatives
+	Mean_Response_sorted[]=(Mean_Response_sorted[p]<0)?(0):(Mean_Response_sorted[p])
+	Wavestats/Q Mean_Response 
 	if (V_Max>0) // if any non-zero ones are left
-	  	Maximum_Response/=V_max
-		Maximum_Response_sorted/=V_Max
+	  	Mean_Response/=V_max
+		Mean_Response_sorted/=V_Max
 	endif
+	
+	// "PCA responses"
+	make/o/n=(nConditions) PCA_Response = 0
+	make/o/n=(nConditions) PCA_Response_sorted = 0	
+	
+	for(cc=0;cc<nConditions;cc+=1)
+		// get time offset for this condition
+		make /o/n=(SnippetDuration) tempaverage = Bar_Averages[p][cc][rr]
+		make /o/n=(BaseDuration) tempBase = Bar_Averages[p][cc][rr]
+		WaveStats/Q tempBase
+		variable BaseOffset = V_Avg
+		tempaverage-=V_Avg // offet to center at 0
+		
+			// get 'Response Onset'
+		WaveStats/Q tempaverage
+		variable ResponseOnset = 0
+		for (ff=0;ff<SnippetDuration;ff+=1)
+			if (tempaverage[ff]>V_Max/2) // 33% of peak is reached
+				responseOnset = ff
+				ff=SnippetDuration
+			endif
+		endfor
+		
 
-	Bar_Responses[][rr] = Maximum_Response[p]
-	Bar_Responses_sorted[0,nConditions-1][rr] = Maximum_Response_sorted[p]
-	Bar_Responses_sorted[nConditions][rr] = Maximum_Response_sorted[0]//extra condition wrap
+		variable current_time_offset = - ResponseOnset  + SnippetDuration/4 // aligns it on response onset
+		TimeAlignedAverages[][cc][rr]=Bar_Averages[p-current_time_offset][cc][rr]-BaseOffset // this will throw an out of range error a lot
+		TimeAlignedAverages_Average[][rr]+=TimeAlignedAverages[p][cc][rr]/nConditions
+		
+				
+		// since we are here, also do the snippets
+		for (tt=0;tt<nTrials;tt+=1)
+			TimeAlignedSnippets[][cc*nTrials+tt][rr]=Bar_Individual[p-current_time_offset][cc][tt][rr]-BaseOffset // this will throw an out of range error a lot
+		endfor
+	endfor
+
+	
+	make /o/n=(SnippetDuration, nConditions) PCAInput_temp = TimeAlignedAverages[p][q][rr] //- TimeAlignedAverages_Average[p][rr]
+	
+	
+	
+	PCA /SCMT /SRMT PCAInput_temp
+	wave M_C // [0][]
+	PCA_Response[]=M_C[0][p]
+	WaveStats/Q PCA_Response
+	if (V_Sum<0)
+		PCA_Response*=-1 // flip the ones that are all negative
+	endif
+	for(cc=0;cc<nConditions;cc+=1)
+		PCA_Response_sorted[Conditions[cc]]= PCA_Response[cc]
+	endfor
+
+	
+	
+	
+	/// ASSIGN
+	if (evaluation_method==1)
+		Bar_Responses[][rr] = Mean_Response[p]
+		Bar_Responses_sorted[0,nConditions-1][rr] = Mean_Response_sorted[p]
+		Bar_Responses_sorted[nConditions][rr] = Mean_Response_sorted[0]//extra condition wrap
+	elseif (evaluation_method==2)
+		Bar_Responses[][rr] = PCA_Response[p] 
+		Bar_Responses_sorted[0,nConditions-1][rr] = PCA_Response_sorted[p] 
+		Bar_Responses_sorted[nConditions][rr] = PCA_Response_sorted[0] //extra condition wrap
+	endif
+	
+	
 endfor
+
+//killwaves tempaverage, PCAInput_temp
 
 setscale x,0,360,"deg." Bar_Responses_sorted
 
@@ -191,12 +282,12 @@ for (rr=0;rr<nROIs;rr+=1)
 	Bar_Responses_sorted_vector[nConditions][1][rr]=CurrentY[0]	
 endfor
 
-killwaves CurrentWave,CurrentX, CurrentY, Maximum_Response, Maximum_Response_sorted
+killwaves CurrentWave,CurrentX, CurrentY, Mean_Response, Mean_Response_sorted
 killwaves InputTraces
 
-/////Get angle of preferred direction////
+/////Get angle of preferred direction + orientation////
  
- make /o/n=(2,2,nRois) MeanVectors = 0
+make /o/n=(2,2,nRois) MeanVectors = 0
  
 make/o/n=(nRois) Bar_Angles = 0
 make/o/n=(nConditions+1) xValue = 0
@@ -233,17 +324,30 @@ Bar_AnglesDeg=Bar_AnglesDeg*180/pi
 duplicate/o Bar_Angles, Bar_AnglesPis
 Bar_AnglesPis=Bar_Angles/pi
 
+/////////////////////////////////////
 // display
+/////////////////////////////////////
 
-if (Display_averages==1)
+
+make /o/n=(5,2) Crossplot = 0
+Crossplot[0][0]=-1
+Crossplot[1][0]=1
+Crossplot[2][]=NaN
+Crossplot[3][1]=1
+Crossplot[4][1]=-1
+
+
+if (Display_individuals==1)
 	make /o/n=(1) M_Colors
 	Colortab2Wave Rainbow256
 	for (rr=0;rr<nRois;rr+=1)
 		// plot vector version
-		display /k=1 /l=VectorY /b=VectorX Bar_Responses_sorted_vector[][1][rr] vs Bar_Responses_sorted_vector[][0][rr]
+		display /k=1 
+		Appendtograph /l=VectorY /b=VectorX crossplot[][1] vs Crossplot[][0]
+		Appendtograph /l=VectorY /b=VectorX Bar_Responses_sorted_vector[][1][rr] vs Bar_Responses_sorted_vector[][0][rr]
 		Appendtograph /l=VectorY /b=VectorX MeanVectors[][1][rr] vs MeanVectors[][0][rr]
 		
-		ModifyGraph axisEnab(VectorY)={0.05,1},axisEnab(VectorX)={0.05,0.45};DelayUpdate
+		ModifyGraph axisEnab(VectorY)={0.05,1},axisEnab(VectorX)={0.05,0.3};DelayUpdate
 		ModifyGraph freePos(VectorY)={0,kwFraction},freePos(VectorX)={0,kwFraction}
 		
 		SetAxis VectorY -1,1;DelayUpdate
@@ -251,6 +355,7 @@ if (Display_averages==1)
 		ModifyGraph marker(Bar_Responses_sorted_vector)=19;DelayUpdate
 		ModifyGraph msize(Bar_Responses_sorted_vector)=1,lsize=1.5
 		ModifyGraph rgb(MeanVectors) = (0,0,0)
+		ModifyGraph lstyle(Crossplot)=3,lsize(Crossplot)=1,rgb(Crossplot)=(0,0,0)
 	
 		// plot individual response version
 		for (cc=0;cc<nConditions;cc+=1)
@@ -274,14 +379,28 @@ if (Display_averages==1)
 			ModifyGraph rgb($tracename) = (0,0,0)
 			ModifyGraph offset($tracename)={Condition_offsets[Conditions[cc]][0],Condition_offsets[Conditions[cc]][1]}
 		endfor		
-		•ModifyGraph noLabel(RespY)=2,noLabel(RespX)=2,axThick(RespY)=0,axThick(RespX)=0;DelayUpdate
-		•ModifyGraph axisEnab(RespY)={0.05,1},axisEnab(RespX)={0.55,1};DelayUpdate
-		•ModifyGraph freePos(RespY)={0.55,kwFraction},freePos(RespX)={0,kwFraction}
+		ModifyGraph noLabel(RespY)=2,noLabel(RespX)=2,axThick(RespY)=0,axThick(RespX)=0;DelayUpdate
+		ModifyGraph axisEnab(RespY)={0.05,1},axisEnab(RespX)={0.35,0.6};DelayUpdate
+		ModifyGraph freePos(RespY)={0.55,kwFraction},freePos(RespX)={0,kwFraction}
 		
+		// plot Averages time aligned on top of each other
+		for (cc=0;cc<nConditions;cc+=1)
+			Appendtograph /l=Resp2Y /b=Resp2X TimeAlignedAverages[][cc][rr]
+			tracename = "TimeAlignedAverages#"+Num2Str(cc)
+			if (cc==0)
+				tracename = "TimeAlignedAverages"
+			endif
+			ModifyGraph rgb($tracename) = (0,0,0,32768)
+		endfor		
+		ModifyGraph noLabel(Resp2Y)=2,noLabel(Resp2X)=2,axThick(Resp2Y)=0,axThick(Resp2X)=0;DelayUpdate
+		ModifyGraph axisEnab(Resp2Y)={0.05,1},axisEnab(Resp2X)={0.65,1};DelayUpdate
+		ModifyGraph freePos(Resp2Y)={0.55,kwFraction},freePos(Resp2X)={0,kwFraction}
 		
 		// global
 		ModifyGraph fSize=8
-		ModifyGraph width=300,height={Aspect,0.5}
+		â€¢ModifyGraph width=700,height=200
+		DoUpdate
+		ModifyGraph width=0,height=0
 		variable colorposition = 255 * (rr+1)/nRois
 		ModifyGraph rgb(Bar_Responses_sorted_vector)=(M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2])
 		ModifyGraph lblPos(VectorY)=47;DelayUpdate
@@ -289,7 +408,12 @@ if (Display_averages==1)
 	
 	//	ModifyGraph width=0,height=0
 	endfor
-	
+endif
+
+////////////////
+
+
+if (Display_averages==1)
 	display /k=1 
 	Appendimage Bar_Responses_sorted
 	
@@ -300,85 +424,87 @@ if (Display_averages==1)
 	SetAxis/A/R left
 	ModifyImage Bar_Responses_sorted ctab= {-1,*,BlueBlackRed,0}
 	
+
+
+
+	// Additional display stuff quickly hacked in
+	display /k=1
+	Appendimage Stack_ave
+	Appendimage ROIs
+	duplicate /o MeanVectors MeanVectors_inflated
+	MeanVectors_inflated*=100
+	make /o/n=(1) M_Colors
+	Colortab2Wave Rainbow256
+	
+	for (rr=0;rr<nROIs;rr+=1)
+		
+			colorposition = 255 * (Bar_AnglesPis[rr])/2
+			if (colorposition>255)
+				colorposition=255
+			endif
+			if (colorposition<0)
+				colorposition=0
+			endif
+			
+			if (Bar_VectorSum[rr]>VectorSum_Threshold)
+				ModifyImage ROIs explicit=1,eval={-rr-1,M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2]}
+			else
+				ModifyImage ROIs explicit=1,eval={-rr-1,30000,30000,30000}
+			endif
+			
+			
+			Appendtograph MeanVectors_inflated[][1][rr] vs MeanVectors_inflated[][0][rr]	
+			tracename = "MeanVectors_inflated#"+Num2Str(rr)
+			if (rr==0)
+				  tracename = "MeanVectors_inflated"
+			endif
+		if (NumType(Bar_AnglesPis[rr])==0)	
+			ModifyGraph rgb($tracename) = (M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2])
+		endif
+	endfor
+	ModifyGraph lsize=1.5
+	ModifyGraph height={Aspect,1}
+
+	// histogram of angles
+	•Make/N=(nAngleBins+1)/O Bar_AnglesPis_Hist;DelayUpdate
+	•Histogram/B={0-1/nAngleBins,2/nAngleBins,nAngleBins+1} Bar_AnglesPis,Bar_AnglesPis_Hist;DelayUpdate
+	
+	Bar_AnglesPis_Hist[0]+=Bar_AnglesPis_Hist[nAngleBins] // loop 
+	Bar_AnglesPis_Hist[nAngleBins]=Bar_AnglesPis_Hist[0]
+	
+	//•Display /k=1 Bar_AnglesPis_Hist
+	//•ModifyGraph fSize(left)=8,axisEnab(left)={0.05,1},axisEnab(bottom)={0.05,1};DelayUpdate
+	Bar_AnglesPis_Hist/=nROIs // normalise by ALL ROIs (ncluding non DS ones)
+	//•Label left "\\Z10Fraction of all ROIs";DelayUpdate
+	//•Label bottom "\\Z10Preferred Direction"
+	//•ModifyGraph mode=5,hbFill=5,rgb=(0,0,0)
+	//•SetAxis bottom 0,2
+	//SetAxis left 0,*
+	// radial
+	display /k=1 
+	make /o/n=(2) plotdummy = 0
+	Appendtograph plotdummy vs plotdummy
+	ModifyGraph zero=1,fSize=8,axisEnab(left)={0.05,1},axisEnab(bottom)={0.08,1};DelayUpdate
+	SetAxis left -RadialHist_Range,RadialHist_Range;DelayUpdate
+	SetAxis bottom -RadialHist_Range,RadialHist_Range
+	ModifyGraph height={Aspect,1}
+	ShowTools/A arrow
+	
+	for (cc=0;cc<nAngleBins;cc+=1)
+	
+		variable x1 = -1 * Bar_AnglesPis_Hist[cc] *  cos(((cc-0.5)/nAngleBins)*2*pi)
+		variable y1 = -1* Bar_AnglesPis_Hist[cc] *  sin(((cc-0.5)/nAngleBins)*2*pi)
+		variable x2 = -1 * Bar_AnglesPis_Hist[cc] *  cos(((cc+0.5)/nAngleBins)*2*pi)
+		variable y2 = -1 * Bar_AnglesPis_Hist[cc] *  sin(((cc+0.5)/nAngleBins)*2*pi)
+		
+		colorposition = 255 * (cc/nAngleBins)
+		SetDrawEnv xcoord= bottom,ycoord= left,fillpat= 3,fillfgc= (M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2]);DelayUpdate
+		DrawPoly 0,0,1,1,{0,0,x1,y1,x2,y2,0,0}
+	endfor
+	
+	HideTools/A
+	
 endif
-
-
-// Additional display stuff quickly hacked in
-display /k=1
-Appendimage Stack_ave
-Appendimage ROIs
-duplicate /o MeanVectors MeanVectors_inflated
-MeanVectors_inflated*=100
-make /o/n=(1) M_Colors
-Colortab2Wave Rainbow256
-
-for (rr=0;rr<nROIs;rr+=1)
-	
-		colorposition = 255 * (Bar_AnglesPis[rr])/2
-		if (colorposition>255)
-			colorposition=255
-		endif
-		if (colorposition<0)
-			colorposition=0
-		endif
-		
-		if (Bar_VectorSum[rr]>VectorSum_Threshold)
-			ModifyImage ROIs explicit=1,eval={-rr-1,M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2]}
-		else
-			ModifyImage ROIs explicit=1,eval={-rr-1,30000,30000,30000}
-		endif
-		
-		
-		Appendtograph MeanVectors_inflated[][1][rr] vs MeanVectors_inflated[][0][rr]	
-		tracename = "MeanVectors_inflated#"+Num2Str(rr)
-		if (rr==0)
-			  tracename = "MeanVectors_inflated"
-		endif
-	if (NumType(Bar_AnglesPis[rr])==0)	
-		ModifyGraph rgb($tracename) = (M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2])
-	endif
-endfor
-ModifyGraph lsize=1.5
-ModifyGraph height={Aspect,1}
-
-// histogram of angles
-•Make/N=(nAngleBins+1)/O Bar_AnglesPis_Hist;DelayUpdate
-•Histogram/B={0-1/nAngleBins,2/nAngleBins,nAngleBins+1} Bar_AnglesPis,Bar_AnglesPis_Hist;DelayUpdate
-
-Bar_AnglesPis_Hist[0]+=Bar_AnglesPis_Hist[nAngleBins] // loop 
-Bar_AnglesPis_Hist[nAngleBins]=Bar_AnglesPis_Hist[0]
-
-//•Display /k=1 Bar_AnglesPis_Hist
-//•ModifyGraph fSize(left)=8,axisEnab(left)={0.05,1},axisEnab(bottom)={0.05,1};DelayUpdate
-Bar_AnglesPis_Hist/=nROIs // normalise by ALL ROIs (ncluding non DS ones)
-//•Label left "\\Z10Fraction of all ROIs";DelayUpdate
-//•Label bottom "\\Z10Preferred Direction"
-//•ModifyGraph mode=5,hbFill=5,rgb=(0,0,0)
-//•SetAxis bottom 0,2
-//SetAxis left 0,*
-// radial
-display /k=1 
-make /o/n=(2) plotdummy = 0
-Appendtograph plotdummy vs plotdummy
-ModifyGraph zero=1,fSize=8,axisEnab(left)={0.05,1},axisEnab(bottom)={0.08,1};DelayUpdate
-SetAxis left -RadialHist_Range,RadialHist_Range;DelayUpdate
-SetAxis bottom -RadialHist_Range,RadialHist_Range
-ModifyGraph height={Aspect,1}
-ShowTools/A arrow
-
-for (cc=0;cc<nAngleBins;cc+=1)
-
-	variable x1 = -1 * Bar_AnglesPis_Hist[cc] *  cos(((cc-0.5)/nAngleBins)*2*pi)
-	variable y1 = -1* Bar_AnglesPis_Hist[cc] *  sin(((cc-0.5)/nAngleBins)*2*pi)
-	variable x2 = -1 * Bar_AnglesPis_Hist[cc] *  cos(((cc+0.5)/nAngleBins)*2*pi)
-	variable y2 = -1 * Bar_AnglesPis_Hist[cc] *  sin(((cc+0.5)/nAngleBins)*2*pi)
-	
-	colorposition = 255 * (cc/nAngleBins)
-	SetDrawEnv xcoord= bottom,ycoord= left,fillpat= 3,fillfgc= (M_Colors[colorposition][0],M_Colors[colorposition][1],M_Colors[colorposition][2]);DelayUpdate
-	DrawPoly 0,0,1,1,{0,0,x1,y1,x2,y2,0,0}
-endfor
-
-HideTools/A
 
 
 end
