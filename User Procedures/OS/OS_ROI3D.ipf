@@ -24,6 +24,7 @@ endif
 variable X_cut = OS_Parameters[%LightArtifact_cut]
 variable LineDuration = OS_Parameters[%LineDuration]
 variable nPlanes = OS_Parameters[%nPlanes]
+variable/G gTriggerMode = OS_Parameters[%Trigger_Mode]
 
 // data handling
 string input_name = "wDataCh"+Num2Str(Channel)+"_detrended"
@@ -31,6 +32,8 @@ duplicate /o $input_name InputData
 variable nX = DimSize(InputData,0)
 variable nY = DimSize(InputData,1)
 variable nF = DimSize(InputData,2)
+variable nF_Snippet = 0 // placeholder to be overridden
+variable/G gnLoops = 0
 variable nY_orig = nY/nPlanes
 variable yySeed = floor(nY_orig/2)
 variable zzSeed = floor(nPlanes/2)
@@ -39,7 +42,7 @@ variable xxSeed = floor(nX/2)
 variable Framerate = 1/(nY * LineDuration) // Hz 
 variable Total_time = (nF * nX ) * LineDuration
 print "Recorded ", total_time, "s @", framerate, "Hz"
-variable xx,yy,ff,pp,rr // initialise counters
+variable xx,yy,ff,pp,rr,ll // initialise counters
 
 Colortab2Wave Rainbow256
 wave M_Colors
@@ -240,6 +243,9 @@ make /o/n=(nX,nPlanes) XZROIImage = ROIs3D[p][yySeed][q]
 make /o/n=(nPlanes,nY_orig) YZROIImage = ROIs3D[xxSeed][q][p]
 
 make /o/n=(nF) DisplayTrace = NaN
+make /o/n=(nF) DisplayTriggers = NaN
+make /o/n=(nF_Snippet) DisplayTrace_Ave = NaN
+make /o/n=(nF_Snippet,gnLoops) DisplayTrace_Snippets = NaN
 make /o/n=(nF) TimePointMarker = NaN
 
 make /o/n=(5,2) XYCross = NaN
@@ -281,6 +287,26 @@ if (nPlanes<2)
 	YZROIImage = NaN
 endif
 
+// get the triggers if exist
+variable nTriggers = 0
+variable tt
+gnLoops = 0
+if (waveexists($"TriggerTimes")==1) // Triggertimes has the correct length
+	wave Triggertimes
+	wave Triggertimes_Frame // this one is not correct length but it has the frame times per trigger
+	nTriggers = Dimsize(Triggertimes,0)
+	for (tt=0;tt<nTriggers;tt+=gTriggerMode)
+		DisplayTriggers[Triggertimes_Frame[tt]]=0
+		if ((gnLoops+1)*gTriggerMode<=nTriggers) // if this loop is complete
+			gnLoops+=1
+		endif
+	endfor
+	nF_Snippet = Triggertimes_Frame[gTriggerMode] - Triggertimes_Frame[0]
+	make /o/n=(nF_Snippet) DisplayTrace_Ave = NaN
+	make /o/n=(nF_Snippet,gnLoops) DisplayTrace_Snippets = NaN
+	
+endif
+
 
 // SET up the GIZMO
 //NEWGizmo /k=1 /n=RoiPickerGizmo
@@ -295,15 +321,17 @@ endif
 //ModifyGizmo showInfo
 //ModifyGizmo zoomMode=1
 
-NEWGizmo /k=1 /n=RoiPickerGizmo
-ModifyGizmo zoomMode=1
-AppendToGizmo DefaultScatter=ROIs3D_GizmoCoordinates
-ModifyGizmo ModifyObject=axes0,objectType=Axes,property={ -1,ticks,0}
-ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ Shape,1}
-ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ scatterColorType,1}
-ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ colorWave,ROIs3D_GizmoColours}
-ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ Shape,2}
-ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ size,0.1}
+if (nPlanes>1) // only open 3D viewer if it is 3D data (i.e. nPlanes > 1)
+	NEWGizmo /k=1 /n=RoiPickerGizmo
+	ModifyGizmo zoomMode=1
+	AppendToGizmo DefaultScatter=ROIs3D_GizmoCoordinates
+	ModifyGizmo ModifyObject=axes0,objectType=Axes,property={ -1,ticks,0}
+	ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ Shape,1}
+	ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ scatterColorType,1}
+	ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ colorWave,ROIs3D_GizmoColours}
+	ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ Shape,2}
+	ModifyGizmo ModifyObject=scatter0,objectType=scatter,property={ size,0.1}
+endif
 
 // open the interactive panel
 variable TopWidth = 50
@@ -415,16 +443,30 @@ Appendtograph /l=ImageY /b=ImageX XYCross[][1] vs XYCross[][0]
 Appendtograph /l=ImageZ /b=ImageX XZCross[][1] vs XZCross[][0]
 Appendtograph /l=ImageY /b=ImageZ2 YZCross[][1] vs YZCross[][0]
 
+
 Appendtograph /l=TraceY /b=TraceX DisplayTrace
 Appendtograph /l=Trace2Y /b=TraceX TimePointMarker
+Appendtograph /l=Trace3Y /b=TraceX DisplayTriggers
+
+for (ll=0;ll<gnLoops;ll+=1)
+	string SnippetName = "DisplayTrace_Snippets#"+Num2Str(ll)
+	if (ll==0)
+		SnippetName = "DisplayTrace_Snippets"
+	endif
+	Appendtograph /l=TraceY /b=TraceX2 DisplayTrace_Snippets[][ll]
+	ModifyGraph rgb($SnippetName)=(0,0,0,19661)
+endfor
+Appendtograph /l=TraceY /b=TraceX2 DisplayTrace_Ave
+
 
 Appendimage /l=FullImageY /b=FullImageX Stack_Ave
 Appendimage /l=FullImageY /b=FullImageX ROIs
 
 ModifyGraph axisEnab(ImageY)={0.5,1},axisEnab(ImageX)={0,0.5},axisEnab(ImageZ)={0.25,0.45},axisEnab(ImageZ2)={0.55,0.75}
 ModifyGraph axisEnab(FullImageX)={0.8,1}
-ModifyGraph axisEnab(TraceY)={0,0.2}, axisEnab(TraceX)={0,0.75}
+ModifyGraph axisEnab(TraceY)={0,0.2}, axisEnab(TraceX)={0,0.4}, axisEnab(TraceX2)={0.45,0.75}
 ModifyGraph axisEnab(Trace2Y)={0,0.2}
+ModifyGraph axisEnab(Trace3Y)={0,0.2}
 
 for (rr=0;rr<gnRois;rr+=1)
 	colorposition = 255 * (rr+1)/gnRois
@@ -447,7 +489,9 @@ ModifyGraph zmrkSize(ROISeeds#1)={ROISeeds_MarkerSize[*][1],0,5,0,5}
 ModifyGraph zmrkSize(ROISeeds#2)={ROISeeds_MarkerSize[*][0],0,5,0,5}
 
 ModifyGraph rgb(DisplayTrace)=(0,0,0),mode(TimePointMarker)=3,marker(TimePointMarker)=10,msize(TimePointMarker)=10
+ModifyGraph mode(DisplayTriggers)=3,marker(DisplayTriggers)=10,msize(DisplayTriggers)=30,rgb(DisplayTriggers)=(2^16-1,0,0)
 ModifyGraph noLabel(TraceY)=2,noLabel(TraceX)=2,noLabel(Trace2Y)=2
+ModifyGraph lsize(DisplayTrace_Ave)=1.5,rgb(DisplayTrace_Ave)=(0,0,0)
 
 DoUpdate
 ModifyGraph width=0,height=0
@@ -1089,6 +1133,9 @@ NVAR gSphereInflationZ
 NVAR gnROIs
 NVAR gROIAlpha_scale
 
+NVAR gTriggerMode
+NVAR gnLoops
+
 NVAR gPlaneshuffle
 
 NVAR gFloodtolerance
@@ -1111,7 +1158,6 @@ wave XYROIImage
 wave XZROIImage 
 wave YZROIImage
 wave ReferenceStack
-wave DisplayTrace
 
 variable nX = Dimsize(ROIs3D,0)
 variable nY_Orig = Dimsize(ROIs3D,1)
@@ -1603,6 +1649,9 @@ NVAR gnROIs
 NVAR gROIAlpha_Scale
 NVAR gROIMOde 
 
+NVAR gTriggerMode
+NVAR gnLoops
+
 wave ROIs
 wave ROIs3D
 wave Data4D
@@ -1614,6 +1663,8 @@ wave XZROIImage
 wave YZROIImage 
 wave M_Colors
 wave DisplayTrace
+wave DisplayTrace_Ave
+wave DisplayTrace_Snippets
 wave ROISeeds
 
 variable nX = Dimsize(ROIs3D,0)
@@ -1686,6 +1737,8 @@ endfor
 
 // update the Display Trace
 Displaytrace=0
+DisplayTrace_Ave = 0
+DisplayTrace_Snippets = 0
 for (xx=0;xx<nX;xx+=1)
 	for (yy=0;yy<nY_orig;yy+=1)
 		for (zz=0;zz<nPlanes;zz+=1)
@@ -1695,6 +1748,14 @@ for (xx=0;xx<nX;xx+=1)
 		endfor
 	endfor
 endfor
+if (Dimsize(DisplayTrace_Ave,0)>0) // if there are triggers this will be >0
+	wave Triggertimes_Frame
+	variable tt
+	for (tt=0;tt<gnLoops;tt+=1)
+		DisplayTrace_Ave[]+=Displaytrace[p+Triggertimes_Frame[tt*gTriggerMode]]/gnLoops
+		DisplayTrace_Snippets[][tt]=Displaytrace[p+Triggertimes_Frame[tt*gTriggerMode]]
+	endfor
+endif
 
 // update the GIZMO versions
 //duplicate /o ROIs3D ROIs3D_Gizmo

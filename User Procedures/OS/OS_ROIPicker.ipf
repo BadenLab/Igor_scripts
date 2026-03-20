@@ -77,6 +77,7 @@ Appendimage /l=AnatomyY /b=AnatomyX RoiPicker_image_smth
 Appendimage /l=AnatomyY /b=AnatomyX ROIs
 Appendtograph /l=AnatomyY /b=AnatomyX ROISeeds[][1] vs ROISeeds[][0]
 Appendtograph /l=FunctionY /b=FunctionX CurrentROITrace
+//Appendtograph /l=FunctionY /b=FunctionX2 CurrentROITrace_Avg
 
 ModifyGraph fSize=8,lblPos=47,freePos={0,kwFraction}
 ModifyGraph noLabel=2,axThick=0
