@@ -42,7 +42,7 @@ variable X_cut = OS_Parameters[%LightArtifact_cut]
 variable LineDuration = OS_Parameters[%LineDuration]
 variable nPxBinning = OS_Parameters[%ROI_PxBinning]
 
-variable nLifesLeft = 10
+variable nLifesLeft = 1000
 variable nROIs_absolute_Max = 1000 // does not allow going over 1000 here, otherwise start to get memory issues
 
 // data handling
@@ -172,7 +172,7 @@ if (correlation_minimum<1 && useMask4Corr == 0) // if this is set to 1, skip thi
 	if (GaussSize>0) // Gauss filter smooth the sub image
 		MatrixFilter/N=(GaussSize)/P=1 gauss correlation_projection_sub
 	endif
-	duplicate /o correlation_projection_sub testtest
+	//duplicate /o correlation_projection_sub testtest
 	
 	make/o/n=(nRois_max) RoiSizes = nan
 	make /o/n=(nX,nY) ROIs = 1 // 1 means "no roi/ background"
@@ -370,7 +370,9 @@ Correlation_projection[][]=(NumType(Correlation_projection[p][q])==0)?(Correlati
 
 
 // cleanup
-killwaves InputData,W_Statslinearcorrelationtest,currentwave_main,currentwave_comp, correlation_projection_sub, allRois
+killwaves InputData,W_Statslinearcorrelationtest,currentwave_main,currentwave_comp, allRois
 killwaves currentRoi,InputDataBinDiv,ROIs_new
+
+//killwaves correlation_projection_sub
 
 end
