@@ -25,7 +25,7 @@ Variable xPixelsInd,yPixelsInd,realPixDurInd,lineDur,sampRate,sampPeriod// Andre
 /// DETREND ////////////////////////////////////////////////////////////////////////////////////////////////
 
 SetDimLabel 0,entry_position,Detrend_Skip,OS_Parameters
-OS_Parameters[%Detrend_Skip] = 1 // 1 skips the detrend
+OS_Parameters[%Detrend_Skip] = 0 // 1 skips the detrend
 entry_position+=1
 
 SetDimLabel 0,entry_position,Detrend_nTimeBin,OS_Parameters
@@ -152,7 +152,7 @@ entry_position+=2
 /// QC Projections  /////////////////////////////////////////////////////////////////////////
 
 SetDimLabel 0,entry_position,QCProjection_make,OS_Parameters
-OS_Parameters[%QCProjection_make] = 0 // Compute QC projection or not - default 1 (yes)
+OS_Parameters[%QCProjection_make] = 1 // Compute QC projection or not - default 1 (yes)
 entry_position+=1
 
 SetDimLabel 0,entry_position,QCProj_TriggersPerStim,OS_Parameters
@@ -206,7 +206,7 @@ OS_Parameters[%Noise_interval_sec] = 0.078 // Refresh rate of the Noise (in seco
 entry_position+=1
 
 SetDimLabel 0,entry_position,Noise_FilterLength_s,OS_Parameters
-OS_Parameters[%Noise_FilterLength_s] = 2 // Length extracted in seconds
+OS_Parameters[%Noise_FilterLength_s] = 1.3 // Length extracted in seconds
 entry_position+=1
 
 SetDimLabel 0,entry_position,Kernel_SDplot,OS_Parameters
