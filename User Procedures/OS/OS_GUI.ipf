@@ -41,6 +41,7 @@ function OS_GUI()
 
 	variable BHeight = 25
 	variable BWidth1 = 175
+	variable BWidth1b = 115
 	variable BWidth2 = 85
 	variable BWidth3 = 55
 	variable BWidth4 = 40
@@ -97,10 +98,12 @@ function OS_GUI()
 	
 	Button ROIManual,pos={BX,Block5Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Manual"
 	Button ROIManualApply,pos={BX+BWidth3+BGapX,Block5Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Apply"
-	Button ROIPixelate,pos={BX+BWidth3*2+BGapX*2,Block5Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Pixels"
+	Button ROIEdit,pos={BX+BWidth3*2+BGapX*2,Block5Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Edit"
+	//Button ROIPixelate,pos={BX+BWidth3*2+BGapX*2,Block5Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Pixels" // replaced by edit
 	
 	Button ROIPicker1,pos={BX,Block5Y+2*BGapY+BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Picker3D" 
 	Button ROIPicker2,pos={BX+BWidth2+BGapX,Block5Y+2*BGapY+BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="SnailROIs" 
+	
 	
 	Button ROICorr,pos={BX,Block5Y+3*BGapY+2*BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Auto Corr"
 	Button ROISD,pos={BX+BWidth2+BGapX,Block5Y+3*BGapY+2*BHeight},size={BWidth2,BHeight},proc=OS_GUI_Buttonpress,title="Auto SD"
@@ -110,8 +113,8 @@ function OS_GUI()
 	
 	Button TracesAndTriggers,pos={BX,Block6Y+BGapY},size={BWidth1,BHeight},proc=OS_GUI_Buttonpress,title="Traces and Triggers"
 	
-	Button Average,pos={BX,Block7Y+BGapY},size={BWidth1,BHeight},proc=OS_GUI_Buttonpress,title="Average"
-	
+	Button Average,pos={BX,Block7Y+BGapY},size={BWidth1b,BHeight},proc=OS_GUI_Buttonpress,title="Average"
+	Button RGBMap,pos={BX+BWidth1b+BGapX,Block7Y+BGapY},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="RGB"
 		
 	Button Events,pos={BX,Block7Y+2*BGapY+BHeight},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title="Events"			
 	Button Cluster,pos={BX+BWidth3+BGapX,Block7Y+2*BGapY+BHeight},size={BWidth3,BHeight},proc=OS_GUI_Buttonpress,title=" Cluster "			
@@ -181,11 +184,13 @@ Function OS_GUI_Buttonpress(ba) : ButtonControl
 				case "ROIManualApply":
 					OS_ApplyManualRoi()
 					break	
-				case "ROIPixelate":
-					OS_monoPixelApply()
-					break						
-				
-				
+				//case "ROIPixelate":
+					//OS_monoPixelApply()
+					//break
+				case "ROIEdit":
+					OS_ROIEdit()
+					break							
+						
 				case "ROIPicker1":
 					OS_ROI3D()
 					break
@@ -214,6 +219,12 @@ Function OS_GUI_Buttonpress(ba) : ButtonControl
 				case "Average":
 					OS_BasicAveraging()
 					break
+				
+				case "RGBMap":
+					OS_Average_RGBMontage()
+					break
+					
+					
 				case "Events":
 					OS_EventFinder()
 					break					
