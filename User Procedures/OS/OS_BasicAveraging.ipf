@@ -172,6 +172,10 @@ for (rr=0;rr<nRois;rr+=1)
 	QualityCriterion[rr]= variance_of_mean / Mean_of_variance
 endfor
 
+// export handling
+duplicate /o OutputTraceSnippets $output_name1
+duplicate /o OutputTraceAverages $output_name2
+duplicate /o OutputTimeSnippets $output_name4
 
 // make average stack (optional) - frame precision
 
@@ -318,17 +322,6 @@ endif
 QC_projection_RGB[][][]=(QC_projection_RGB[p][q][r]>=2^16-1)?(2^16-1):(QC_projection_RGB[p][q][r])
 
 //
-
-
-
-
-
-
-// export handling
-duplicate /o OutputTraceSnippets $output_name1
-duplicate /o OutputTraceAverages $output_name2
-duplicate /o OutputTimeSnippets $output_name4
-
 
 	
 // display
